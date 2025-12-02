@@ -1,0 +1,46 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "letters": "ÇMA",
+      "possibleWords": [
+        {
+          "turkish": "MAÇ",
+          "english": "match"
+        },
+        {
+          "turkish": "ÇAM",
+          "english": "pine"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "letters": "KAR",
+      "possibleWords": [
+        {
+          "turkish": "KAR",
+          "english": "snow"
+        },
+        {
+          "turkish": "ARK",
+          "english": "canal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "letters": "YAZ",
+      "possibleWords": [
+        {
+          "turkish": "YAZ",
+          "english": "summer"
+        },
+        {
+          "turkish": "AZY",
+          "english": "few"
+        }
+      ]
+    }
+  ]
+}
