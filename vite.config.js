@@ -11,7 +11,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2015',
     minify: 'esbuild',
-    sourcemap: false
+    sourcemap: false,
+    chunkSizeWarningLimit: 1000
   },
   server: {
     host: '0.0.0.0',
