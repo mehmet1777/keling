@@ -11,14 +11,17 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="description" content="Eğlenceli bir kelime avı oyunu! Türkçe kelimeleri bul, İngilizcelerini öğren.">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      // Service Worker sadece web için
+      if ('serviceWorker' in navigator && !window.Capacitor) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((registration) => {

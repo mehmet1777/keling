@@ -14,16 +14,9 @@
   "categories": ["games", "education"],
   "icons": [
     {
-      "src": "/icons/icon.svg",
+      "src": "icons/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
+      "type": "image/svg+xml"
     }
   ],
   "prefer_related_applications": false

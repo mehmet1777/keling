@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <h2>Icon Generator - Tarayıcıda Aç ve İndir</h2>
+    <div id="downloads"></div>
+    
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        const downloadsDiv = document.getElementById('downloads');
+        
+        sizes.forEach(size => {
+            // Canvas oluştur
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Gradient arka plan
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#6366f1');
+            gradient.addColorStop(1, '#8b5cf6');
+            
+            // Rounded rectangle
+            const radius = size * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.lineTo(size - radius, 0);
+            ctx.quadraticCurveTo(size, 0, size, radius);
+            ctx.lineTo(size, size - radius);
+            ctx.quadraticCurveTo(size, size, size - radius, size);
+            ctx.lineTo(radius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - radius);
+            ctx.lineTo(0, radius);
+            ctx.quadraticCurveTo(0, 0, radius, 0);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // "K" harfi
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.55}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('K', size / 2, size / 2);
+            
+            // Download linki oluştur
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `icon-${size}.png`;
+                link.textContent = `İndir: icon-${size}.png`;
+                link.style.display = 'block';
+                link.style.margin = '10px';
+                downloadsDiv.appendChild(link);
+            });
+        });
+        
+        // Maskable icon'lar (padding ile)
+        [192, 512].forEach(size => {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = size * 0.1;
+            const innerSize = size - (padding * 2);
+            
+            // Gradient arka plan
+            const gradient = ctx.createLinearGradient(padding, padding, size - padding, size - padding);
+            gradient.addColorStop(0, '#6366f1');
+            gradient.addColorStop(1, '#8b5cf6');
+            
+            // Rounded rectangle with padding
+            const radius = innerSize * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(padding + radius, padding);
+            ctx.lineTo(size - padding - radius, padding);
+            ctx.quadraticCurveTo(size - padding, padding, size - padding, padding + radius);
+            ctx.lineTo(size - padding, size - padding - radius);
+            ctx.quadraticCurveTo(size - padding, size - padding, size - padding - radius, size - padding);
+            ctx.lineTo(padding + radius, size - padding);
+            ctx.quadraticCurveTo(padding, size - padding, padding, size - padding - radius);
+            ctx.lineTo(padding, padding + radius);
+            ctx.quadraticCurveTo(padding, padding, padding + radius, padding);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // "K" harfi
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${innerSize * 0.55}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('K', size / 2, size / 2);
+            
+            // Download linki oluştur
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `maskable-${size}.png`;
+                link.textContent = `İndir: maskable-${size}.png`;
+                link.style.display = 'block';
+                link.style.margin = '10px';
+                downloadsDiv.appendChild(link);
+            });
+        });
+    </script>
+</body>
+</html>
