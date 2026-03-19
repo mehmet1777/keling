@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "914621538684",
+    "project_id": "keling-baed0",
+    "storage_bucket": "keling-baed0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:914621538684:android:0804f6fdc5c0e6e439c4f9",
+        "android_client_info": {
+          "package_name": "com.keling.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "914621538684-34v40fuddb6p0vis1b14ufe2l3l82j04.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keling.app",
+            "certificate_hash": "955ef404968a038fff75ab141bee7e6c7c3506de"
+          }
+        },
+        {
+          "client_id": "914621538684-hmvg9m06fgftbgvc5p5f8q10bdcl4sbg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keling.app",
+            "certificate_hash": "00e52d526257529c6208916636dc87fc8a96061d"
+          }
+        },
+        {
+          "client_id": "914621538684-tqfd261pbvu0o7ur6tghe64ftlbb1heb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keling.app",
+            "certificate_hash": "eb156efb627fae5e4fa2438da1b8d0eb06428ca9"
+          }
+        },
+        {
+          "client_id": "914621538684-dke8dmn875d916ekgprhb35jougml3rd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEA2ecFDr82utZtrzTBDoPeFFSRCLyYLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "914621538684-dke8dmn875d916ekgprhb35jougml3rd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

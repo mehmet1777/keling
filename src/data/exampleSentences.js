@@ -2,7 +2,7 @@
 export const exampleSentences = {
   // ID: 1
   "additional": {
-    turkish: "Otel, spa gibi ek hizmetler sunuyor.",
+    turkish: "Otel, sıpa gibi ek hizmetler sunuyor.",
     english: ": The hotel offers additional services such as a spa."
   },
   // ID: 2

@@ -55,14 +55,14 @@ const InGameTutorial = ({ levelId, onDismiss, onHighlightButton, language = 'tr'
       tr: {
         title: "İpucu Jokeri",
         desc: "Takıldığında rastgele bir kelimenin bir harfini açar",
-        cost: "5",
+        cost: "20",
         visual: "hint",
         highlightButton: "hint"
       },
       en: {
         title: "Hint Joker",
         desc: "Reveals one letter of a random word when stuck",
-        cost: "5",
+        cost: "20",
         visual: "hint",
         highlightButton: "hint"
       }
@@ -71,14 +71,14 @@ const InGameTutorial = ({ levelId, onDismiss, onHighlightButton, language = 'tr'
       tr: {
         title: "Peri Jokeri",
         desc: "Tüm kelimelerin tüm harflerini açar! En güçlü joker",
-        cost: "15",
+        cost: "60",
         visual: "fairy",
         highlightButton: "fairy"
       },
       en: {
         title: "Fairy Joker",
         desc: "Reveals all letters of all words! Most powerful joker",
-        cost: "15",
+        cost: "60",
         visual: "fairy",
         highlightButton: "fairy"
       }

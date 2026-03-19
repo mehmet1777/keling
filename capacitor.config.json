@@ -1,12 +1,38 @@
 {
-  "appId": "com.kelime.app",
-  "appName": "Kelime Oyunu",
+  "appId": "com.keling.app",
+  "appName": "KeliNG",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",
-    "cleartext": true
+    "hostname": "keling-baed0.firebaseapp.com"
   },
-  "android": {
-    "allowMixedContent": true
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": false,
+      "backgroundColor": "#1e1b4b",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#0F172A",
+      "overlaysWebView": false
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"],
+      "googleClientId": "914621538684-dke8dmn875d916ekgprhb35jougml3rd.apps.googleusercontent.com"
+    },
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "914621538684-dke8dmn875d916ekgprhb35jougml3rd.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    },
+    "Browser": {
+      "androidCustomTabs": true
+    }
   }
 }

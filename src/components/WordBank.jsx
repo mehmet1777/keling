@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exampleSentences } from '../data/exampleSentences';
 import { playSound } from '../utils/SoundManager';
+import { getAnimationConfig, getTransitionConfig } from '../utils/graphicsConfig';
+import { speak, speakWord, speakSentence } from '../utils/ttsService';
 
 const WordBank = ({ completedLevels, levels, onBackClick }) => {
   const [selectedWord, setSelectedWord] = useState(null);
@@ -19,6 +21,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
   const [tutorialStep, setTutorialStep] = useState(1);
   const totalTutorialSteps = 4;
   const [language] = useState(() => localStorage.getItem('language') || 'tr');
+  const [graphicsQuality] = useState(() => localStorage.getItem('graphicsQuality') || 'high');
 
   const translations = {
     tr: {
@@ -187,43 +190,9 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
     }
   };
 
-  // Telaffuz fonksiyonu - voiceGender ayarını kullan
-  const speak = (text, lang) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = lang === 'tr-TR' ? 0.75 : 0.85;
-    
-    // Ayarlardan ses cinsiyetini al
-    const voiceGender = localStorage.getItem('voiceGender') || 'male';
-    
-    // Pitch ayarı - sadece Türkçe için değiştir, İngilizce David'i olduğu gibi bırak
-    if (lang === 'tr-TR') {
-      utterance.pitch = voiceGender === 'male' ? 0.5 : 1.3;
-    } else {
-      utterance.pitch = 1.0; // İngilizce için normal pitch (David'in orijinal sesi)
-    }
-    
-    // Uygun sesi seç
-    const allVoices = window.speechSynthesis.getVoices();
-    
-    if (lang === 'tr-TR') {
-      const turkishVoices = allVoices.filter(voice => voice.lang.startsWith('tr'));
-      const turkishVoice = voiceGender === 'male' 
-        ? turkishVoices[0] 
-        : turkishVoices[turkishVoices.length > 1 ? 1 : 0];
-      if (turkishVoice) utterance.voice = turkishVoice;
-    } else {
-      const englishVoice = allVoices.find(voice => 
-        voice.lang.startsWith('en') && 
-        (voiceGender === 'male' 
-          ? (voice.name.includes('Male') || voice.name.includes('David') || voice.name.includes('Mark') || voice.name.includes('Daniel'))
-          : (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria') || voice.name.includes('Karen') || voice.name.includes('Zira'))
-        )
-      ) || allVoices.find(voice => voice.lang.startsWith('en'));
-      if (englishVoice) utterance.voice = englishVoice;
-    }
-    
-    window.speechSynthesis.speak(utterance);
+  // Telaffuz fonksiyonu - ttsService kullan (Web ve Android için)
+  const handleSpeak = (text, lang) => {
+    speak(text, lang);
   };
 
   // Kelime için örnek cümleleri getir
@@ -330,6 +299,8 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
     setSelectedWord(null);
   };
 
+  const animConfig = getAnimationConfig();
+
   return (
     <div 
       className="min-h-screen w-full flex flex-col items-center bg-gradient-to-b from-neutral-900 via-indigo-950/20 to-black overflow-auto select-none"
@@ -348,7 +319,12 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
         }
       `}</style>
       {/* Fixed Üst Butonlar - Geri, Layout Toggle ve Yardım */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-b from-neutral-900 via-neutral-900/95 to-transparent pb-2 pt-3 sm:pt-4 px-3 sm:px-4 md:px-8">
+      <div 
+        className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-b from-neutral-900 via-neutral-900/95 to-transparent pb-2 px-3 sm:px-4 md:px-8"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)'
+        }}
+      >
         <div className="w-full max-w-md mx-auto flex items-center justify-between">
           <motion.button
             onClick={() => {
@@ -419,8 +395,8 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
           transition={{ duration: 0.8 }}
         >
           <div className="relative inline-block">
-            {/* Sparkle particles */}
-            {[...Array(6)].map((_, i) => (
+            {/* Sparkle particles - Sadece yüksek kalitede */}
+            {graphicsQuality === 'high' && [...Array(6)].map((_, i) => (
               <motion.div
                 key={i}
                 className="absolute w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"
@@ -442,24 +418,28 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
             
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight relative">
               <span className="inline-flex items-baseline relative">
-                {/* 3D shadow layers */}
-                <span className="absolute inset-0 bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent blur-sm translate-x-1 translate-y-1 opacity-50">
-                  {t.title}
-                </span>
-                <span className="absolute inset-0 bg-gradient-to-r from-purple-700 to-purple-800 bg-clip-text text-transparent blur-md translate-x-2 translate-y-2 opacity-30">
-                  {t.title}
-                </span>
+                {/* 3D shadow layers - Sadece yüksek kalitede */}
+                {graphicsQuality === 'high' && (
+                  <>
+                    <span className="absolute inset-0 bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent blur-sm translate-x-1 translate-y-1 opacity-50">
+                      {t.title}
+                    </span>
+                    <span className="absolute inset-0 bg-gradient-to-r from-purple-700 to-purple-800 bg-clip-text text-transparent blur-md translate-x-2 translate-y-2 opacity-30">
+                      {t.title}
+                    </span>
+                  </>
+                )}
                 
                 {/* Main text with neon glow */}
                 <motion.span 
                   className="relative bg-gradient-to-r from-purple-400 via-pink-400 to-purple-500 bg-clip-text text-transparent"
-                  animate={{ 
+                  animate={graphicsQuality === 'high' ? { 
                     backgroundPosition: ['0%', '100%', '0%'],
-                  }}
+                  } : {}}
                   transition={{ duration: 3, repeat: Infinity }}
                   style={{ 
                     backgroundSize: '200% auto',
-                    filter: 'drop-shadow(0 0 15px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 30px rgba(236, 72, 153, 0.6))',
+                    filter: graphicsQuality === 'high' ? 'drop-shadow(0 0 15px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 30px rgba(236, 72, 153, 0.6))' : 'none',
                   }}
                 >
                   {t.title}
@@ -745,7 +725,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     <div className="flex items-center gap-2 sm:gap-3 py-0.5 sm:py-1">
                       <div className="flex-1 h-0.5 bg-gradient-to-r from-transparent via-purple-500/60 to-purple-500/60 rounded-full"></div>
                       <motion.div
-                        animate={{ rotate: [0, 180, 360] }}
+                        animate={graphicsQuality === 'high' ? { rotate: [0, 180, 360] } : {}}
                         transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -756,7 +736,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     </div>
                   ) : (
                     <motion.div
-                      animate={{ rotate: [0, 180, 360] }}
+                      animate={graphicsQuality === 'high' ? { rotate: [0, 180, 360] } : {}}
                       transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                       className="flex items-center justify-center"
                     >
@@ -801,8 +781,8 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                       {/* Telaffuz Butonu */}
                       <motion.div 
                         className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-lg bg-purple-600/30 border border-purple-500/40 flex items-center justify-center group-hover:bg-purple-600/50 transition-colors"
-                        whileHover={{ scale: 1.15 }}
-                        whileTap={{ scale: 0.9 }}
+                        whileHover={graphicsQuality !== 'low' ? { scale: 1.15 } : {}}
+                        whileTap={graphicsQuality !== 'low' ? { scale: 0.9 } : {}}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -812,8 +792,8 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                       {/* Örnek Cümle Butonu */}
                       <motion.div 
                         className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-lg bg-pink-600/30 border border-pink-500/40 flex items-center justify-center group-hover:bg-pink-600/50 transition-colors"
-                        whileHover={{ scale: 1.15 }}
-                        whileTap={{ scale: 0.9 }}
+                        whileHover={graphicsQuality !== 'low' ? { scale: 1.15 } : {}}
+                        whileTap={graphicsQuality !== 'low' ? { scale: 0.9 } : {}}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-pink-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -824,14 +804,14 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     {/* İlgi Çekici Çağrı Metni - Sağda */}
                     <motion.div 
                       className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-purple-600/30 to-pink-600/30 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5 border border-purple-400/40"
-                      animate={{ 
+                      animate={graphicsQuality === 'high' ? { 
                         scale: [1, 1.05, 1],
                         boxShadow: [
                           "0 0 0px rgba(168, 85, 247, 0.4)",
                           "0 0 20px rgba(168, 85, 247, 0.6)",
                           "0 0 0px rgba(168, 85, 247, 0.4)"
                         ]
-                      }}
+                      } : {}}
                       transition={{ duration: 2, repeat: Infinity }}
                     >
                       <span className="text-[9px] sm:text-[10px] md:text-xs text-purple-200 font-bold">
@@ -1304,7 +1284,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     <motion.button
                       onClick={() => {
                         playSound('telefontıklama.mp3');
-                        speak(selectedWord.turkish, 'tr-TR');
+                        speakWord(selectedWord.turkish, selectedWord.turkish, 'tr-TR');
                       }}
                       className="p-3 bg-pink-600/30 hover:bg-pink-600/50 rounded-xl border border-pink-400/30 transition-colors"
                       whileTap={{ scale: 0.95 }}
@@ -1329,7 +1309,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     <motion.button
                       onClick={() => {
                         playSound('telefontıklama.mp3');
-                        speak(selectedWord.english, 'en-US');
+                        speakWord(selectedWord.turkish, selectedWord.english, 'en-US');
                       }}
                       className="p-3 bg-blue-600/30 hover:bg-blue-600/50 rounded-xl border border-blue-400/30 transition-colors"
                       whileTap={{ scale: 0.95 }}
@@ -1368,7 +1348,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     <motion.button
                       onClick={() => {
                         playSound('telefontıklama.mp3');
-                        speak(getExampleSentences(selectedWord).turkish, 'tr-TR');
+                        speakSentence(selectedWord.english, getExampleSentences(selectedWord).turkish, 'tr-TR');
                       }}
                       className="p-1.5 bg-purple-600/30 hover:bg-purple-600/50 rounded-lg border border-purple-400/30 transition-colors"
                       whileTap={{ scale: 0.95 }}
@@ -1393,7 +1373,7 @@ const WordBank = ({ completedLevels, levels, onBackClick }) => {
                     <motion.button
                       onClick={() => {
                         playSound('telefontıklama.mp3');
-                        speak(getExampleSentences(selectedWord).english.replace(/^:\s*/, ''), 'en-US');
+                        speakSentence(selectedWord.english, getExampleSentences(selectedWord).english.replace(/^:\s*/, ''), 'en-US');
                       }}
                       className="p-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 rounded-lg border border-indigo-400/30 transition-colors"
                       whileTap={{ scale: 0.95 }}

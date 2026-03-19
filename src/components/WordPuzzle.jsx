@@ -35,6 +35,23 @@ const toTurkishUpperCase = (str) => {
 const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, hardModeActive, hardModeLevel, setHardModeActive, setHardModeLevel }) => {
 
   const [language] = useState(() => localStorage.getItem('language') || 'tr');
+  const [graphicsQuality] = useState(() => localStorage.getItem('graphicsQuality') || 'high');
+
+  // Her bölüm için farklı renk paleti
+  const LEVEL_COLORS = [
+    { main: '#4a4a6a', glow: '#6a6a9a', light: '#9a9aca' }, // Lacivert
+    { main: '#3a5a8a', glow: '#5a8aba', light: '#8abaed' }, // Mavi
+    { main: '#5a4a8a', glow: '#8a7aba', light: '#baaa' }, // Mor
+    { main: '#4a7a9a', glow: '#6aaaca', light: '#9adafa' }, // Turkuaz
+    { main: '#6a3a6a', glow: '#9a6a9a', light: '#ca9aca' }, // Magenta
+    { main: '#4a8a7a', glow: '#6ababa', light: '#9aeaea' }, // Yeşil
+    { main: '#8a4a4a', glow: '#ba7a7a', light: '#eaaaaa' }, // Kırmızı
+    { main: '#7a7a4a', glow: '#aaba7a', light: '#daeaaa' }, // Sarı
+  ];
+  
+  const currentLevelColor = hardModeActive 
+    ? { main: '#991b1b', glow: '#ef4444', light: '#fca5a5' }
+    : LEVEL_COLORS[(level.id - 1) % LEVEL_COLORS.length];
 
   const translations = {
     tr: {
@@ -86,6 +103,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
   const [currentWord, setCurrentWord] = useState('');
   const [dragPath, setDragPath] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [currentMousePos, setCurrentMousePos] = useState(null); // Parmak/fare pozisyonu
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState(false);
   const [errorWord, setErrorWord] = useState('');
@@ -94,6 +112,8 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
   const [isShuffling, setIsShuffling] = useState(false);
   const [oldPositions, setOldPositions] = useState([]);
   const [showHintAnimation, setShowHintAnimation] = useState(false);
+  const [showCenterWord, setShowCenterWord] = useState(null); // Ekran ortasında gösterilecek kelime
+  const [hiddenEnglishWords, setHiddenEnglishWords] = useState(new Set()); // Ortadan kaybolan kelimeler (yerine dönmesin)
   
   // Yanlış kelime cezası hesaplama fonksiyonu
   const calculatePenalty = (attemptNumber) => {
@@ -371,8 +391,14 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
   };
 
   const calculateLetterPositions = () => {
-    // Daire çapını artırıyoruz
-    const radius = 120;
+    // Daire çapını artırıyoruz - 10+ harf için daha büyük
+    const letterCount = letters.length;
+    let radius = 120; // varsayılan
+    
+    if (letterCount >= 13) radius = 136;
+    else if (letterCount >= 11) radius = 130;
+    else if (letterCount >= 10) radius = 132;
+    
     const centerX = 150;
     const centerY = 150;
     
@@ -400,125 +426,108 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
     const drawCircle = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Dönen ışık halkası
-      rotation += 0.02;
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2 + rotation;
-        const startAngle = angle;
-        const endAngle = angle + Math.PI / 6;
-        
-        ctx.beginPath();
-        ctx.arc(150, 150, 120, startAngle, endAngle);
-        const gradient = ctx.createLinearGradient(
-          150 + Math.cos(startAngle) * 120,
-          150 + Math.sin(startAngle) * 120,
-          150 + Math.cos(endAngle) * 120,
-          150 + Math.sin(endAngle) * 120
-        );
-        gradient.addColorStop(0, `${COLORS.primary}00`);
-        gradient.addColorStop(0.5, `${COLORS.primary}66`);
-        gradient.addColorStop(1, `${COLORS.primary}00`);
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 4;
-        ctx.stroke();
+      // Harf sayısına göre dinamik çember yarıçapı
+      const letterCount = letters.length;
+      let circleRadius = 120;
+      if (letterCount >= 13) circleRadius = 136;
+      else if (letterCount >= 11) circleRadius = 130;
+      else if (letterCount >= 10) circleRadius = 132;
+      
+      // Her bölüm için farklı renk (level.id'ye göre) - Zor modda kırmızı
+      const levelColors = [
+        { main: '#4a4a6a', glow: '#6a6a9a' }, // Lacivert
+        { main: '#3a5a8a', glow: '#5a8aba' }, // Mavi
+        { main: '#5a4a8a', glow: '#8a7aba' }, // Mor
+        { main: '#4a7a9a', glow: '#6aaaca' }, // Turkuaz
+        { main: '#6a3a6a', glow: '#9a6a9a' }, // Magenta
+        { main: '#4a8a7a', glow: '#6ababa' }, // Yeşil
+        { main: '#8a4a4a', glow: '#ba7a7a' }, // Kırmızı
+        { main: '#7a7a4a', glow: '#aaba7a' }, // Sarı
+      ];
+      const colorIndex = (level.id - 1) % levelColors.length;
+      const levelColor = hardModeActive 
+        ? { main: '#991b1b', glow: '#ef4444' } // Zor modda kırmızı
+        : levelColors[colorIndex];
+      
+      // Dönen ışık halkası - sadece düşük kalite değilse
+      if (graphicsQuality !== 'low') {
+        rotation += 0.02;
+        for (let i = 0; i < 6; i++) {
+          const angle = (i / 6) * Math.PI * 2 + rotation;
+          const startAngle = angle;
+          const endAngle = angle + Math.PI / 6;
+          
+          ctx.beginPath();
+          ctx.arc(150, 150, circleRadius, startAngle, endAngle);
+          const gradient = ctx.createLinearGradient(
+            150 + Math.cos(startAngle) * circleRadius,
+            150 + Math.sin(startAngle) * circleRadius,
+            150 + Math.cos(endAngle) * circleRadius,
+            150 + Math.sin(endAngle) * circleRadius
+          );
+          gradient.addColorStop(0, `${levelColor.glow}00`);
+          gradient.addColorStop(0.5, `${levelColor.glow}bb`);
+          gradient.addColorStop(1, `${levelColor.glow}00`);
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = 6;
+          ctx.stroke();
+        }
       }
       
-      // Daire çizgisi
+      // Daire çizgisi - Bölüm rengine göre
       ctx.beginPath();
-      ctx.arc(150, 150, 120, 0, 2 * Math.PI);
-      ctx.strokeStyle = `${COLORS.secondary}33`;
-      ctx.lineWidth = 2;
+      ctx.arc(150, 150, circleRadius, 0, 2 * Math.PI);
+      ctx.strokeStyle = levelColor.main;
+      ctx.lineWidth = 4;
       ctx.stroke();
 
-      // Dış daire efekti
-      ctx.beginPath();
-      ctx.arc(150, 150, 125, 0, 2 * Math.PI);
-      ctx.strokeStyle = `${COLORS.secondary}11`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      // Dış daire efekti - sadece düşük kalite değilse
+      if (graphicsQuality !== 'low') {
+        ctx.beginPath();
+        ctx.arc(150, 150, circleRadius + 5, 0, 2 * Math.PI);
+        ctx.strokeStyle = `${COLORS.secondary}11`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-      // İç daire efekti
-      ctx.beginPath();
-      ctx.arc(150, 150, 115, 0, 2 * Math.PI);
-      ctx.strokeStyle = `${COLORS.secondary}11`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+        // İç daire efekti
+        ctx.beginPath();
+        ctx.arc(150, 150, circleRadius - 5, 0, 2 * Math.PI);
+        ctx.strokeStyle = `${COLORS.secondary}11`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
 
-      // Seçim çizgisi çizimi - Geliştirilmiş iz efekti
-      if (dragPath.length > 1) {
+      // Seçim çizgisi çizimi - Net ve temiz (parmak takipli)
+      if (dragPath.length > 0 && isDragging) {
         const firstLetterPos = letterPositions[dragPath[0]];
         if (firstLetterPos) {
-          // Dış parlama efekti (en geniş)
+          // Tek katman, net çizgi - Level rengine göre
           ctx.beginPath();
           ctx.moveTo(firstLetterPos.x, firstLetterPos.y);
-          for (let i = 1; i < dragPath.length; i++) {
-            const letterPos = letterPositions[dragPath[i]];
-            if (letterPos) {
-              ctx.lineTo(letterPos.x, letterPos.y);
-            }
-          }
-          ctx.strokeStyle = `${COLORS.trail}15`;
-          ctx.lineWidth = 24;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.shadowColor = COLORS.trail;
-          ctx.shadowBlur = 30;
-          ctx.stroke();
           
-          // Orta parlama efekti
-          ctx.beginPath();
-          ctx.moveTo(firstLetterPos.x, firstLetterPos.y);
+          // Seçilen harfler arasında çiz
           for (let i = 1; i < dragPath.length; i++) {
             const letterPos = letterPositions[dragPath[i]];
             if (letterPos) {
               ctx.lineTo(letterPos.x, letterPos.y);
             }
           }
-          ctx.strokeStyle = `${COLORS.glow}40`;
-          ctx.lineWidth = 14;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.shadowColor = COLORS.glow;
-          ctx.shadowBlur = 20;
-          ctx.stroke();
           
-          // Ana çizgi (en parlak)
-          ctx.beginPath();
-          ctx.moveTo(firstLetterPos.x, firstLetterPos.y);
-          for (let i = 1; i < dragPath.length; i++) {
-            const letterPos = letterPositions[dragPath[i]];
-            if (letterPos) {
-              ctx.lineTo(letterPos.x, letterPos.y);
+          // Son seçilen harften parmak pozisyonuna kadar çiz
+          if (currentMousePos && dragPath.length > 0) {
+            const lastLetterPos = letterPositions[dragPath[dragPath.length - 1]];
+            if (lastLetterPos) {
+              ctx.lineTo(currentMousePos.x, currentMousePos.y);
             }
           }
-          ctx.strokeStyle = `${COLORS.primary}88`;
+          
+          ctx.strokeStyle = levelColor.glow;
           ctx.lineWidth = 6;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
-          ctx.shadowColor = COLORS.highlight;
-          ctx.shadowBlur = 15;
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
           ctx.stroke();
-          
-          // Parçacık efektleri
-          for (let i = 0; i < dragPath.length; i++) {
-            const letterPos = letterPositions[dragPath[i]];
-            if (letterPos) {
-              // Her harf etrafında parlayan noktalar
-              for (let j = 0; j < 3; j++) {
-                const angle = (Date.now() / 1000 + i + j) * Math.PI;
-                const radius = 8 + Math.sin(Date.now() / 200 + i) * 3;
-                const px = letterPos.x + Math.cos(angle) * radius;
-                const py = letterPos.y + Math.sin(angle) * radius;
-                
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, 2 * Math.PI);
-                ctx.fillStyle = `${COLORS.accent}${Math.floor(50 + Math.sin(Date.now() / 300 + j) * 50).toString(16)}`;
-                ctx.shadowColor = COLORS.accent;
-                ctx.shadowBlur = 8;
-                ctx.fill();
-              }
-            }
-          }
         }
       }
     };
@@ -535,7 +544,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         cancelAnimationFrame(animationFrame);
       }
     };
-  }, [dragPath, COLORS.primary, COLORS.secondary, COLORS.trail, COLORS.glow, COLORS.highlight, COLORS.accent, letterPositions]);
+  }, [dragPath, COLORS.primary, COLORS.secondary, COLORS.trail, COLORS.glow, COLORS.highlight, COLORS.accent, letterPositions, graphicsQuality, currentMousePos, isDragging]);
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging || !circleRef.current) return;
@@ -543,6 +552,9 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
     const rect = circleRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / 1.2; // scale faktörünü hesaba katıyoruz
     const y = (e.clientY - rect.top) / 1.2;
+
+    // Parmak/fare pozisyonunu güncelle (çizgi için)
+    setCurrentMousePos({ x, y });
 
     // Hassasiyet eşiği (daha küçük = daha hassas, daha büyük = daha az hassas)
     const threshold = 30;
@@ -602,6 +614,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
+    setCurrentMousePos(null); // Parmak pozisyonunu temizle
     
     const word = currentWord;
     // İngilizce modda İngilizce kelimeyi ara, normal modda Türkçe kelimeyi ara
@@ -611,6 +624,19 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
 
     if (matchingWord && !foundWords.has(matchingWord.turkish)) {
       setShowSuccess(true);
+      
+      // Önce kutu yerinde görünsün, 500ms sonra ortaya gitsin
+      setTimeout(() => {
+        setShowCenterWord({
+          turkish: matchingWord.turkish,
+          english: matchingWord.english
+        });
+        // 2 saniye ortada kalsın, sonra kaybolsun (yerine dönmesin)
+        setTimeout(() => {
+          setHiddenEnglishWords(prev => new Set([...prev, matchingWord.turkish]));
+          setShowCenterWord(null);
+        }, 1500);
+      }, 500);
       
       // Level 1'de ilk kelime bulunduğunda parmak animasyonunu ve highlight'ı kaldır
       if (level.id === 1 && highlightedButton === 'letters') {
@@ -643,7 +669,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
           // });
           setShowCompletionCard(true);
           onComplete(level.id, timer + (milliseconds / 100));
-        }, 1000);
+        }, 2250); // Kelime animasyonu bittikten sonra aç (2s + 0.25s)
       }
     } else if (word.length >= 2) {
       // Yanlış kelime - hata animasyonu göster ve ceza uygula
@@ -706,6 +732,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
       }
       
       setIsDragging(false);
+      setCurrentMousePos(null); // Parmak pozisyonunu temizle
       
       const word = currentWord;
       // İngilizce modda İngilizce kelimeyi ara, normal modda Türkçe kelimeyi ara
@@ -715,6 +742,19 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
 
       if (matchingWord && !foundWords.has(matchingWord.turkish)) {
         setShowSuccess(true);
+        
+        // Önce kutu yerinde görünsün, 500ms sonra ortaya gitsin
+        setTimeout(() => {
+          setShowCenterWord({
+            turkish: matchingWord.turkish,
+            english: matchingWord.english
+          });
+          // 2 saniye ortada kalsın, sonra kaybolsun (yerine dönmesin)
+          setTimeout(() => {
+            setHiddenEnglishWords(prev => new Set([...prev, matchingWord.turkish]));
+            setShowCenterWord(null);
+          }, 1500);
+        }, 500);
         
         // Level 1'de ilk kelime bulunduğunda parmak animasyonunu ve highlight'ı kaldır
         if (level.id === 1 && highlightedButton === 'letters') {
@@ -747,7 +787,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
             // });
             setShowCompletionCard(true);
             onComplete(level.id, timer + (milliseconds / 100));
-          }, 1000);
+          }, 2250); // Kelime animasyonu bittikten sonra aç (2s + 0.25s)
         }
       } else if (word.length >= 2) {
         // Yanlış kelime - hata animasyonu göster ve ceza uygula
@@ -790,6 +830,11 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
       // Dokunmatik koordinat hesaplamasını iyileştirdim
       const x = (touch.clientX - rect.left); 
       const y = (touch.clientY - rect.top);
+
+      // Parmak pozisyonunu güncelle (çizgi için) - scale faktörü ile
+      const scaledX = x / (rect.width / 300);
+      const scaledY = y / (rect.height / 300);
+      setCurrentMousePos({ x: scaledX, y: scaledY });
 
       // Dokunmatik ekranlarda daha yüksek hassasiyet eşiği (daha küçük = daha hassas)
       const threshold = 50;
@@ -852,7 +897,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
 
   // İpucu fonksiyonu
   const handleHint = useCallback(() => {
-    if (diamonds < 5) return; // Yeterli elmas yoksa ipucu verme
+    if (diamonds < 20) return; // Yeterli elmas yoksa ipucu verme
     
     // İpucu animasyonunu başlat
     setShowHintAnimation(true);
@@ -892,7 +937,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
     }));
     
     // Elmas sayısını azalt
-    useDiamond(5);
+    useDiamond(20);
     
     // Ses efekti çal
     playClickSound();
@@ -919,49 +964,54 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         ]
       };
       
-      // Animasyonu uygula
-      letterElement.animate(glowAnimation, {
-        duration: 2000,
-        easing: 'ease-in-out'
-      });
+      // Animasyonu uygula - sadece düşük kalite değilse
+      if (graphicsQuality !== 'low') {
+        letterElement.animate(glowAnimation, {
+          duration: 2000,
+          easing: 'ease-in-out'
+        });
+      }
       
-      // Parçacık efekti ekle
-      const rect = letterElement.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      
-      for (let i = 0; i < 12; i++) {
-        const particle = document.createElement('div');
-        particle.style.cssText = `
-          position: fixed;
-          width: 6px;
-          height: 6px;
-          background: ${COLORS.accent};
-          border-radius: 50%;
-          pointer-events: none;
-          z-index: 9999;
-          left: ${centerX}px;
-          top: ${centerY}px;
-          box-shadow: 0 0 10px ${COLORS.accent};
-        `;
-        document.body.appendChild(particle);
+      // Parçacık efekti ekle - sadece düşük kalite değilse
+      if (graphicsQuality !== 'low') {
+        const rect = letterElement.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
         
-        const angle = (i / 12) * Math.PI * 2;
-        const distance = 50 + Math.random() * 30;
-        
-        particle.animate([
-          {
-            transform: 'translate(0, 0) scale(1)',
-            opacity: 1
-          },
-          {
-            transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0)`,
-            opacity: 0
-          }
-        ], {
-          duration: 800,
-          easing: 'ease-out'
-        }).onfinish = () => particle.remove();
+        const particleCount = graphicsQuality === 'high' ? 12 : 6; // Orta kalitede yarısı
+        for (let i = 0; i < particleCount; i++) {
+          const particle = document.createElement('div');
+          particle.style.cssText = `
+            position: fixed;
+            width: 6px;
+            height: 6px;
+            background: ${COLORS.accent};
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            left: ${centerX}px;
+            top: ${centerY}px;
+            box-shadow: 0 0 10px ${COLORS.accent};
+          `;
+          document.body.appendChild(particle);
+          
+          const angle = (i / particleCount) * Math.PI * 2;
+          const distance = 50 + Math.random() * 30;
+          
+          particle.animate([
+            {
+              transform: 'translate(0, 0) scale(1)',
+              opacity: 1
+            },
+            {
+              transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0)`,
+              opacity: 0
+            }
+          ], {
+            duration: 800,
+            easing: 'ease-out'
+          }).onfinish = () => particle.remove();
+        }
       }
     }
     
@@ -976,7 +1026,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
 
   // Peri jokeri fonksiyonu
   const handleFairyJoker = useCallback(() => {
-    if (diamonds < 15 || fairyJokerUsed) return;
+    if (diamonds < 60 || fairyJokerUsed) return;
     
     // Tüm harflerin zaten açık olup olmadığını kontrol et
     const allWords = level.words;
@@ -1007,6 +1057,22 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
       y: window.innerHeight * 0.14 + 10
     };
     
+    // Bölüm renkleri - diğer kutularla aynı
+    const levelColors = [
+      { bg: '#1a1a2e', border: '#4a4a6a', text: '#c0c0d0' },
+      { bg: '#16213e', border: '#3a5a8a', text: '#a0c0e0' },
+      { bg: '#1a1a2e', border: '#5a4a8a', text: '#c0b0e0' },
+      { bg: '#162a2e', border: '#4a7a9a', text: '#a0d0e0' },
+      { bg: '#2a1a2a', border: '#6a3a6a', text: '#d0a0d0' },
+      { bg: '#1a2a2a', border: '#4a8a7a', text: '#a0e0d0' },
+      { bg: '#2a1a1a', border: '#8a4a4a', text: '#e0a0a0' },
+      { bg: '#2a2a1a', border: '#7a7a4a', text: '#e0e0a0' },
+    ];
+    const colorIndex = (level.id - 1) % levelColors.length;
+    const levelColor = hardModeActive 
+      ? { bg: '#3a1a1a', border: '#991b1b', text: '#fca5a5' }
+      : levelColors[colorIndex];
+    
     allWords.forEach((word, wordIndex) => {
       // İngilizce modda İngilizce kelimenin harflerini kullan
       const wordText = englishMode ? word.english : word.turkish;
@@ -1020,16 +1086,22 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         if (!newRevealedLetters[word.turkish].includes(letterIndex)) {
           newRevealedLetters[word.turkish].push(letterIndex);
           
-          // Her harf için uçan element oluştur
+          // Her harf için uçan element oluştur - bölüm renginde kutu
           const flyingLetter = document.createElement('div');
           flyingLetter.className = 'flying-letter';
           flyingLetter.style.cssText = `
             position: fixed;
             z-index: 9999;
-            font-size: 48px;
+            font-size: 28px;
             font-weight: bold;
-            color: #FFB6C1;
-            text-shadow: 0 0 20px rgba(255,182,193,0.8);
+            color: #FFFFFF;
+            background: ${levelColor.bg}f5;
+            border: 3px solid ${levelColor.border};
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 40px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 25px ${levelColor.border}88;
             pointer-events: none;
             top: ${fairyPosition.y}px;
             left: ${fairyPosition.x}px;
@@ -1146,7 +1218,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
     });
     
     setRevealedLetters(newRevealedLetters);
-    useDiamond(15);
+    useDiamond(60);
     setShowFairyAnimation(true);
     
     setTimeout(() => {
@@ -1165,9 +1237,12 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
     
   }, [diamonds, level.words, level.id, revealedLetters, useDiamond, playFairyJokerSound, fairyJokerUsed, highlightedButton]);
 
-  // Peri tozu efekti için fonksiyon
+  // Peri tozu efekti için fonksiyon - Sadece yüksek kalitede
   const createSparkles = useCallback((x, y) => {
-    const sparkleCount = 20;
+    // Düşük grafik kalitesinde sparkle efektini atla
+    if (graphicsQuality === 'low') return;
+    
+    const sparkleCount = graphicsQuality === 'high' ? 20 : 10; // Orta kalitede yarısı
     const colors = ['#FFD700', '#FF69B4', '#87CEEB', '#98FB98', '#DDA0DD'];
     
     for (let i = 0; i < sparkleCount; i++) {
@@ -1211,7 +1286,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         fill: 'forwards'
       }).onfinish = () => sparkle.remove();
     }
-  }, []);
+  }, [graphicsQuality]);
 
   // Harf karıştırma fonksiyonu (ücretsiz)
   const handleShuffle = useCallback(() => {
@@ -1256,13 +1331,39 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         transition: 'background 0.5s ease-in-out'
       }}
     >
+      {/* Arka Plan Resmi */}
+      <div 
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage: `url(/backgrounds/game_bg_${((level.id - 1) % 52) + 1}.jpg)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'repeat-y',
+          opacity: 0.9
+        }}
+      />
+      
+      {/* Ekran Ortasında gösterim için arka plan karartma */}
+      <AnimatePresence>
+        {showCenterWord && (
+          <motion.div 
+            className="fixed inset-0 z-[90] pointer-events-none"
+            style={{ background: 'rgba(0,0,0,0.3)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
+        )}
+      </AnimatePresence>
+      
       <div className="relative z-10 w-full max-w-md px-4 flex flex-col min-h-screen"> 
         {/* Level Title with Timer and Diamond Counter - Fixed at top */}
-        <div className="fixed top-0 left-0 right-0 flex items-center justify-between w-full py-2 px-3 z-50" 
+        <div className="fixed top-0 left-0 right-0 flex items-center justify-between w-full py-3 px-3 z-50" 
           style={{
-            backgroundColor: `${COLORS.background}CC`,
-            backdropFilter: 'blur(10px)',
-            borderBottom: `1px solid ${COLORS.accent}33`
+            background: hardModeActive ? 'rgba(127, 29, 29, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+            backdropFilter: 'blur(6px)',
+            borderBottom: hardModeActive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 255, 255, 0.15)',
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)'
           }}> 
           <div className="flex items-center gap-2">
             {/* Level Badge */}
@@ -1272,18 +1373,19 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="relative flex items-center bg-gradient-to-r from-indigo-600/90 to-purple-600/90 rounded-lg px-3 py-1.5 shadow-lg">
+              <div className={`relative flex items-center backdrop-blur-md rounded-md px-2 py-1 shadow-lg ${hardModeActive ? 'bg-red-900/30 border border-red-500/40' : 'bg-white/10 border border-white/20'}`}>
                 {/* Seviye İkonu */}
-                <div className="mr-2">
-                  {level.id <= 10 && <span className="text-lg">📚</span>}
-                  {level.id > 10 && level.id <= 20 && <span className="text-lg">🎯</span>}
-                  {level.id > 20 && level.id <= 30 && <span className="text-lg">🏆</span>}
-                  {level.id > 30 && <span className="text-lg">👑</span>}
+                <div className="mr-1">
+                  {level.id <= 10 && <span className="text-sm">📚</span>}
+                  {level.id > 10 && level.id <= 20 && <span className="text-sm">🎯</span>}
+                  {level.id > 20 && level.id <= 30 && <span className="text-sm">🏆</span>}
+                  {level.id > 30 && <span className="text-sm">👑</span>}
                 </div>
                 
                 {/* Seviye Numarası */}
                 <motion.span 
-                  className="text-lg font-bold text-white"
+                  className="text-sm font-bold text-white"
+                  style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)' }}
                   initial={{ scale: 0.8 }}
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 400 }}
@@ -1294,61 +1396,62 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
             </motion.div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Diamond Counter */}
             <motion.div
-              className="px-3 py-1.5 rounded-lg flex items-center gap-2" 
+              className="px-2 py-1 rounded-md flex items-center gap-1" 
               style={{
-                background: `linear-gradient(135deg, ${COLORS.card}66 0%, ${COLORS.card}33 100%)`,
-                backdropFilter: 'blur(8px)',
-                border: `1px solid ${COLORS.highlight}33`,
-                boxShadow: `0 2px 8px rgba(99, 102, 241, 0.1)`
+                background: hardModeActive ? 'rgba(127, 29, 29, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+                border: hardModeActive ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: hardModeActive ? '0 4px 16px rgba(239, 68, 68, 0.2)' : '0 4px 16px rgba(0, 0, 0, 0.1)'
               }}
             >
               <motion.div
-                animate={{
+                animate={graphicsQuality !== 'low' ? {
                   rotate: [0, 10, -10, 0],
                   scale: [1, 1.1, 1]
-                }}
-                transition={{
+                } : {}}
+                transition={graphicsQuality !== 'low' ? {
                   duration: 3,
                   repeat: Infinity,
                   ease: "easeInOut"
-                }}
+                } : {}}
                 style={{
-                  filter: 'drop-shadow(0 0 8px rgba(96, 165, 250, 0.3))'
+                  filter: graphicsQuality !== 'low' ? 'drop-shadow(0 0 8px rgba(96, 165, 250, 0.3))' : 'none'
                 }}
               >
-                <span className="text-lg">💎</span>
+                <span className="text-sm">💎</span>
               </motion.div>
-              <span className="text-base font-bold text-white" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+              <span className="text-xs font-bold text-white" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)' }}>
                 {diamonds.toFixed(1)}
               </span>
             </motion.div>
             
             {/* Timer */}
             <motion.div
-              className="px-3 py-1.5 rounded-lg text-center" 
+              className="px-2 py-1 rounded-md text-center" 
               style={{
-                backgroundColor: `${COLORS.card}66`,
-                backdropFilter: 'blur(8px)',
-                border: `1px solid ${COLORS.accent}33`,
-                color: COLORS.accent,
+                background: hardModeActive ? 'rgba(127, 29, 29, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+                border: hardModeActive ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
+                color: hardModeActive ? '#FCA5A5' : COLORS.accent,
                 fontFamily: 'monospace',
-                boxShadow: `0 2px 8px rgba(244, 114, 182, 0.1)`
+                boxShadow: hardModeActive ? '0 4px 16px rgba(239, 68, 68, 0.2)' : '0 4px 16px rgba(0, 0, 0, 0.1)'
               }}
             >
-              <span className="text-base font-bold">{formatTime(timer, milliseconds)}</span>
+              <span className="text-xs font-bold" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)' }}>{formatTime(timer, milliseconds)}</span>
             </motion.div>
 
             {/* Ses Ayarları */}
             <motion.button
-              className={`w-9 h-9 rounded-lg flex items-center justify-center bg-gradient-to-br from-indigo-600/30 to-purple-600/30 backdrop-blur-md relative ${highlightedButton === 'sound' ? 'z-[200]' : ''}`}
+              className={`w-7 h-7 rounded-md flex items-center justify-center backdrop-blur-md relative ${highlightedButton === 'sound' ? 'z-[200]' : ''}`}
               style={{
-                border: highlightedButton === 'sound' ? '3px solid #8B5CF6' : `1px solid ${COLORS.highlight}33`,
+                background: hardModeActive ? 'rgba(127, 29, 29, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                border: highlightedButton === 'sound' ? '2px solid #8B5CF6' : hardModeActive ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
                 boxShadow: highlightedButton === 'sound' 
                   ? '0 0 20px rgba(139, 92, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.5)' 
-                  : `0 2px 8px rgba(99, 102, 241, 0.2)`,
+                  : hardModeActive ? '0 4px 16px rgba(239, 68, 68, 0.2)' : '0 4px 16px rgba(0, 0, 0, 0.1)',
               }}
               whileHover={{ 
                 scale: 1.05,
@@ -1407,13 +1510,14 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
         </div>
         
         {/* Empty space to prevent content from being hidden under fixed header */}
-        <div className="h-16"></div>
+        <div className="h-16" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}></div>
         
         {/* Main content container - Using flex-grow to take remaining space */}
-        <div className="flex-grow flex flex-col justify-center items-center">
+        <div className="flex-grow flex flex-col justify-center items-center px-4">
           {/* Word Boxes - Centered in available space */}
           <motion.div 
-            className="grid grid-cols-1 gap-4 w-full mb-8 relative"
+            className="flex flex-wrap gap-1.5 justify-center w-full max-w-full mb-6 relative"
+            style={{ maxWidth: 'calc(100vw - 32px)', minHeight: `${level.words.length > 4 ? 180 : 120}px` }}
             animate={showWordBoxFocus ? {
               scale: [1, 1.05, 1],
             } : {}}
@@ -1453,22 +1557,59 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                 👇
               </motion.div>
             )}
-            {level.words.map((word, index) => (
+            {level.words.map((word, index) => {
+              // Kelime uzunluğuna göre kutucuk boyutu hesapla
+              const wordText = englishMode ? word.english : word.turkish;
+              const letterCount = wordText.replace(/ /g, '').length; // Boşlukları sayma
+              
+              // Kısa kelimeler için büyük, uzun kelimeler için küçük kutucuk
+              let boxSize = 36; // varsayılan
+              if (letterCount <= 4) boxSize = 40;
+              else if (letterCount <= 8) boxSize = 38;
+              else if (letterCount <= 9) boxSize = 36;
+              else {
+                // 10+ harf için ekrana sığacak şekilde hesapla
+                const screenWidth = window.innerWidth - 20;
+                const gapTotal = (letterCount - 1) * 2;
+                const calculatedSize = Math.floor((screenWidth - gapTotal) / letterCount);
+                boxSize = Math.max(20, Math.min(36, calculatedSize));
+              }
+              
+              const fontSize = boxSize >= 36 ? 'text-lg' : boxSize >= 30 ? 'text-base' : boxSize >= 24 ? 'text-sm' : 'text-xs';
+              
+              return (
               <motion.div 
                 key={index}
-                className="flex gap-2 justify-center flex-wrap"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.2 }}
+                className="flex flex-col items-center"
+                style={{ minHeight: `${boxSize + 28}px` }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 }}
               >
-                <div className="flex gap-1 flex-wrap justify-center">
-                  {Array(englishMode ? word.english.length : word.turkish.length).fill('').map((_, letterIndex) => (
+                <div className="flex gap-0.5 justify-center mb-1">
+                  {Array(englishMode ? word.english.length : word.turkish.length).fill('').map((_, letterIndex) => {
+                    const currentLetter = englishMode ? word.english[letterIndex] : word.turkish[letterIndex];
+                    const isSpace = currentLetter === ' ';
+                    
+                    // Boşluk karakteri için sadece boşluk göster (kutucuk yok)
+                    if (isSpace) {
+                      return (
+                        <div 
+                          key={letterIndex} 
+                          style={{ width: '12px', height: `${boxSize}px` }}
+                          data-word={word.turkish}
+                          data-index={letterIndex}
+                        />
+                      );
+                    }
+                    
+                    return (
                     <motion.div
                       key={letterIndex}
                       className="relative"
                       style={{
-                        width: '36px',
-                        height: '36px',
+                        width: `${boxSize}px`,
+                        height: `${boxSize}px`,
                       }}
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -1476,21 +1617,37 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                       data-word={word.turkish}
                       data-index={letterIndex}
                     >
+                      {(() => {
+                        // Her bölüm için farklı koyu renk (level.id'ye göre)
+                        const levelColors = [
+                          { bg: '#1a1a2e', border: '#4a4a6a' }, // Koyu lacivert
+                          { bg: '#16213e', border: '#3a5a8a' }, // Koyu mavi
+                          { bg: '#1a1a3a', border: '#5a4a8a' }, // Koyu mor
+                          { bg: '#0f3460', border: '#4a7a9a' }, // Koyu turkuaz
+                          { bg: '#2d132c', border: '#6a3a6a' }, // Koyu magenta
+                          { bg: '#1e3a3a', border: '#4a8a7a' }, // Koyu yeşil
+                          { bg: '#3a1a1a', border: '#8a4a4a' }, // Koyu kırmızı
+                          { bg: '#2a2a1a', border: '#7a7a4a' }, // Koyu sarı
+                        ];
+                        const colorIndex = (level.id - 1) % levelColors.length;
+                        const levelColor = hardModeActive 
+                          ? { bg: '#3a1a1a', border: '#991b1b' }
+                          : levelColors[colorIndex];
+                        
+                        return (
                       <motion.div
-                        className="absolute inset-0 rounded-lg flex items-center justify-center backdrop-blur-sm uppercase"
+                        className="absolute inset-0 rounded-lg flex items-center justify-center uppercase"
                         style={{
                           background: foundWords.has(word.turkish)
-                            ? `linear-gradient(135deg, ${COLORS.success}44 0%, ${COLORS.success}22 100%)`
-                            : `linear-gradient(135deg, ${COLORS.card}88 0%, ${COLORS.card}44 100%)`,
-                          border: `2px solid ${foundWords.has(word.turkish)
-                            ? COLORS.success
-                            : COLORS.secondary}44`,
+                            ? `linear-gradient(135deg, ${levelColor.border} 0%, ${levelColor.bg} 100%)`
+                            : `linear-gradient(135deg, ${levelColor.bg} 0%, ${levelColor.bg}ee 100%)`,
+                          border: `2px solid ${levelColor.border}`,
                           boxShadow: foundWords.has(word.turkish)
-                            ? `0 0 20px ${COLORS.success}66, inset 0 2px 4px rgba(255,255,255,0.2)`
-                            : `0 2px 4px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.05)`,
+                            ? `0 0 20px ${levelColor.border}66, inset 0 2px 4px rgba(255,255,255,0.2)`
+                            : `0 4px 8px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.1)`,
                           userSelect: 'none',
                         }}
-                        animate={{ 
+                        animate={graphicsQuality !== 'low' ? { 
                           scale: [1, 1.05, 1],
                           rotate: [0, 2, -2, 0],
                           transition: {
@@ -1498,12 +1655,12 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                             repeat: Infinity,
                             ease: "easeInOut"
                           }
-                        }}
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: "spring", stiffness: 300 }}
+                        } : {}}
+                        whileHover={graphicsQuality !== 'low' ? { scale: 1.1 } : {}}
+                        transition={graphicsQuality !== 'low' ? { type: "spring", stiffness: 300 } : { duration: 0 }}
                       >
                         <motion.span 
-                          className="text-lg font-bold tracking-wide uppercase"
+                          className={`${fontSize} font-bold tracking-wide uppercase`}
                           style={{ 
                             display: foundWords.has(word.turkish) || revealedLetters[word.turkish]?.includes(letterIndex)
                               ? 'block'
@@ -1528,76 +1685,153 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                           {englishMode ? word.english.toUpperCase()[letterIndex] : toTurkishUpperCase(word.turkish[letterIndex])}
                         </motion.span>
                       </motion.div>
+                        );
+                      })()}
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </div>
-                {foundWords.has(word.turkish) && (
+                {foundWords.has(word.turkish) && (() => {
+                  // Her bölüm için farklı koyu renk (level.id'ye göre)
+                  const levelColors = [
+                    { bg: '#1a1a2e', border: '#4a4a6a', text: '#8a8aaa' }, // Koyu lacivert
+                    { bg: '#16213e', border: '#3a5a8a', text: '#7a9aba' }, // Koyu mavi
+                    { bg: '#1a1a3a', border: '#5a4a8a', text: '#9a8aba' }, // Koyu mor
+                    { bg: '#0f3460', border: '#4a7a9a', text: '#7abaca' }, // Koyu turkuaz
+                    { bg: '#2d132c', border: '#6a3a6a', text: '#aa7aaa' }, // Koyu magenta
+                    { bg: '#1e3a3a', border: '#4a8a7a', text: '#7acaba' }, // Koyu yeşil
+                    { bg: '#3a1a1a', border: '#8a4a4a', text: '#ca8a8a' }, // Koyu kırmızı
+                    { bg: '#2a2a1a', border: '#7a7a4a', text: '#baba8a' }, // Koyu sarı
+                  ];
+                  const colorIndex = (level.id - 1) % levelColors.length;
+                  const levelColor = hardModeActive 
+                    ? { bg: '#3a1a1a', border: '#991b1b', text: '#fca5a5' }
+                    : levelColors[colorIndex];
+                  
+                  // Eğer bu kelime ortadan kaybolmuşsa, hiç gösterme
+                  if (hiddenEnglishWords.has(word.turkish)) return null;
+                  
+                  // Eğer bu kelime şu an ortada gösteriliyorsa, ortada göster
+                  const isShowingInCenter = showCenterWord && showCenterWord.turkish === word.turkish;
+                  
+                  return (
                   <motion.div 
-                    className="flex items-center px-3 py-1 rounded-full"
+                    layoutId={`english-word-${word.turkish}`}
+                    className="flex items-center justify-center px-3 py-1 rounded-full"
                     style={{ 
-                      color: COLORS.accent,
-                      backgroundColor: `${COLORS.accent}15`,
-                      border: `1px solid ${COLORS.accent}33`,
-                      boxShadow: `0 0 15px ${COLORS.accent}22`
+                      color: levelColor.text,
+                      backgroundColor: levelColor.bg,
+                      border: `2px solid ${levelColor.border}`,
+                      boxShadow: `0 4px 8px rgba(0,0,0,0.4)`,
+                      // Ortada gösteriliyorsa fixed pozisyon - çemberin merkezine
+                      ...(isShowingInCenter ? (() => {
+                        // Kelime uzunluğuna göre left offset hesapla (scale 1.2 ile)
+                        const wordLength = (englishMode ? word.turkish : word.english).length;
+                        // Her karakter yaklaşık 10px genişliğinde, scale 1.2 ile çarpılıyor
+                        const wordWidth = wordLength * 10 * 1.2;
+                        const paddingWidth = 24 * 2 * 1.2; // padding left + right
+                        const totalWidth = wordWidth + paddingWidth;
+                        const leftOffset = totalWidth / 2;
+                        return {
+                          position: 'fixed',
+                          top: '50%',
+                          left: `calc(50% - ${leftOffset}px)`,
+                          transform: 'translateY(-50%)',
+                          zIndex: 100,
+                          padding: '12px 24px',
+                          boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 60px ${levelColor.border}66`
+                        };
+                      })() : {})
                     }}
                     initial={{ opacity: 0, x: -20, scale: 0.8 }}
                     animate={{ 
                       opacity: 1, 
                       x: 0, 
-                      scale: 1,
+                      scale: isShowingInCenter ? 1.2 : 1,
                       transition: {
                         type: "spring",
-                        stiffness: 300,
-                        damping: 20,
-                        duration: 0.5
+                        stiffness: 200,
+                        damping: 20
                       }
                     }}
-                    whileHover={{ 
+                    exit={{ opacity: 0, scale: 0 }}
+                    whileHover={!isShowingInCenter ? { 
                       scale: 1.05,
-                      backgroundColor: `${COLORS.accent}25`,
                       transition: { duration: 0.2 }
-                    }}
+                    } : {}}
                   >
                     <motion.span
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ 
-                        opacity: 1, 
-                        y: 0,
-                        transition: {
-                          delay: 0.2,
-                          duration: 0.3
-                        }
+                      className="font-medium uppercase"
+                      style={{
+                        fontSize: isShowingInCenter ? '1.5rem' : '1rem',
+                        color: isShowingInCenter ? '#FFFFFF' : levelColor.text,
+                        fontFamily: isShowingInCenter ? "'Poppins', sans-serif" : 'inherit',
+                        fontWeight: isShowingInCenter ? 700 : 500,
+                        letterSpacing: isShowingInCenter ? '0.05em' : 'normal'
                       }}
-                      className="font-medium"
                     >
-                      {englishMode ? word.turkish : word.english}
+                      {englishMode ? toTurkishUpperCase(word.turkish) : toTurkishUpperCase(word.english)}
                     </motion.span>
                   </motion.div>
-                )}
+                  );
+                })()}
               </motion.div>
-            ))}
+            );
+            })}
           </motion.div>
 
           {/* Word Display Boxes - Centered */}
-          <div className="flex flex-wrap gap-2 justify-center mb-6 w-full" style={{ minHeight: '48px' }}>
-            {currentWord.split('').map((letter, index) => (
+          <div 
+            className="flex justify-center mb-3 w-full"
+            style={{ height: '40px' }}
+          >
+            {(() => {
+              // Her bölüm için farklı koyu renk (level.id'ye göre)
+              const levelColors = [
+                { bg: '#1a1a2e', border: '#4a4a6a' }, // Koyu lacivert
+                { bg: '#16213e', border: '#3a5a8a' }, // Koyu mavi
+                { bg: '#1a1a3a', border: '#5a4a8a' }, // Koyu mor
+                { bg: '#0f3460', border: '#4a7a9a' }, // Koyu turkuaz
+                { bg: '#2d132c', border: '#6a3a6a' }, // Koyu magenta
+                { bg: '#1e3a3a', border: '#4a8a7a' }, // Koyu yeşil
+                { bg: '#3a1a1a', border: '#8a4a4a' }, // Koyu kırmızı
+                { bg: '#2a2a1a', border: '#7a7a4a' }, // Koyu sarı
+              ];
+              const colorIndex = (level.id - 1) % levelColors.length;
+              const levelColor = hardModeActive 
+                ? { bg: '#3a1a1a', border: '#991b1b' }
+                : levelColors[colorIndex];
+              
+              // Harf sayısına göre dinamik boyut hesapla - ekranı tam kullan
+              const letterCount = currentWord.length || 1;
+              const screenWidth = window.innerWidth;
+              const totalGap = (letterCount - 1) * 2; // 2px gap
+              const availableForBoxes = screenWidth - 16 - totalGap; // 8px padding her yandan
+              const boxSize = Math.floor(availableForBoxes / letterCount);
+              const finalBoxSize = Math.max(16, Math.min(36, boxSize)); // 16-36px arası
+              const fontSize = finalBoxSize <= 20 ? 'text-xs' : finalBoxSize <= 28 ? 'text-sm' : 'text-base';
+              
+              return currentWord.split('').map((letter, index) => (
               <motion.div
                 key={index}
-                className="w-10 h-10 flex items-center justify-center rounded-lg text-lg font-bold uppercase"
+                className={`flex items-center justify-center rounded-md ${fontSize} font-bold uppercase`}
                 style={{
-                  background: `linear-gradient(135deg, ${COLORS.primary}44 0%, ${COLORS.accent}33 100%)`,
+                  width: `${finalBoxSize}px`,
+                  height: `${finalBoxSize}px`,
+                  marginRight: index < letterCount - 1 ? '2px' : '0',
+                  background: `linear-gradient(135deg, ${levelColor.bg} 0%, ${levelColor.bg}ee 100%)`,
                   color: COLORS.text,
-                  border: `2px solid ${COLORS.highlight}66`,
-                  boxShadow: `0 0 15px ${COLORS.primary}44, 0 0 25px ${COLORS.accent}22, inset 0 2px 4px rgba(255,255,255,0.1)`
+                  border: `1.5px solid ${levelColor.border}`,
+                  boxShadow: `0 2px 6px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.1)`
                 }}
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ 
                   scale: [1, 1.05, 1], 
                   rotate: 0,
                   boxShadow: [
-                    `0 0 15px ${COLORS.primary}44, 0 0 25px ${COLORS.accent}22`,
-                    `0 0 20px ${COLORS.primary}66, 0 0 35px ${COLORS.accent}44`,
-                    `0 0 15px ${COLORS.primary}44, 0 0 25px ${COLORS.accent}22`
+                    `0 0 12px ${COLORS.primary}44, 0 0 20px ${COLORS.accent}22`,
+                    `0 0 16px ${COLORS.primary}66, 0 0 28px ${COLORS.accent}44`,
+                    `0 0 12px ${COLORS.primary}44, 0 0 20px ${COLORS.accent}22`
                   ],
                   transition: {
                     type: "spring",
@@ -1622,9 +1856,11 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                   transition: { duration: 0.2 } 
                 }}
               >
-                {letter}
+                {letter === ' ' ? <span className="opacity-60">␣</span> : letter}
               </motion.div>
-            ))}
+            ));
+            })()}
+          
           </div>
           
           {/* Letter Circle - Centered */}
@@ -1635,7 +1871,8 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
               transform: 'scale(1.2)',
               width: '280px', 
               height: '280px',
-              touchAction: 'none' 
+              touchAction: 'none',
+              marginTop: letters.length >= 12 ? '64px' : '32px'
             }}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -1645,6 +1882,32 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd} 
           >
+            {/* Blur arka plan dairesi - Canvas merkezi (150,150) */}
+            {(() => {
+              // Harf sayısına göre dinamik blur boyutu (circleRadius ile aynı mantık)
+              const letterCount = letters.length;
+              let blurRadius = 120;
+              if (letterCount >= 13) blurRadius = 136;
+              else if (letterCount >= 11) blurRadius = 130;
+              else if (letterCount >= 10) blurRadius = 132;
+              const blurSize = blurRadius * 2 - 4;
+              
+              return (
+                <div 
+                  className="absolute rounded-full"
+                  style={{
+                    top: '150px',
+                    left: '150px',
+                    transform: 'translate(-50%, -50%)',
+                    width: `${blurSize}px`,
+                    height: `${blurSize}px`,
+                    background: hardModeActive ? 'rgba(127, 29, 29, 0.15)' : 'rgba(0, 0, 0, 0.08)',
+                    backdropFilter: 'blur(2px)',
+                    border: hardModeActive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)'
+                  }}
+                />
+              );
+            })()}
             <canvas
               ref={canvasRef}
               width={300}
@@ -1728,6 +1991,24 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                   top: pos.y - 25,
                 }}
               >
+                {(() => {
+                  // Her bölüm için farklı koyu renk (level.id'ye göre)
+                  const levelColors = [
+                    { bg: '#1a1a2e', border: '#4a4a6a', selected: '#6a6a9a' }, // Koyu lacivert
+                    { bg: '#16213e', border: '#3a5a8a', selected: '#5a8aba' }, // Koyu mavi
+                    { bg: '#1a1a3a', border: '#5a4a8a', selected: '#8a7aba' }, // Koyu mor
+                    { bg: '#0f3460', border: '#4a7a9a', selected: '#6aaaca' }, // Koyu turkuaz
+                    { bg: '#2d132c', border: '#6a3a6a', selected: '#9a6a9a' }, // Koyu magenta
+                    { bg: '#1e3a3a', border: '#4a8a7a', selected: '#6ababa' }, // Koyu yeşil
+                    { bg: '#3a1a1a', border: '#8a4a4a', selected: '#ba7a7a' }, // Koyu kırmızı
+                    { bg: '#2a2a1a', border: '#7a7a4a', selected: '#aaba7a' }, // Koyu sarı
+                  ];
+                  const colorIndex = (level.id - 1) % levelColors.length;
+                  const levelColor = hardModeActive 
+                    ? { bg: '#3a1a1a', border: '#991b1b', selected: '#ef4444' }
+                    : levelColors[colorIndex];
+                  
+                  return (
                 <motion.button
                   className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl font-bold uppercase
                     ${isDragging && dragPath.includes(index) ? 'scale-90' : 'scale-100'}
@@ -1736,20 +2017,20 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                     background: dragPath.includes(index) 
                       ? (hardModeActive 
                           ? `linear-gradient(135deg, #DC2626 0%, #991B1B 100%)`
-                          : `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.accent} 100%)`)
+                          : `linear-gradient(135deg, ${levelColor.selected} 0%, ${levelColor.border} 100%)`)
                       : (hardModeActive
                           ? `linear-gradient(135deg, #450a0a 0%, #1a0000 100%)`
-                          : `linear-gradient(135deg, ${COLORS.card} 0%, #0F172A 100%)`),
+                          : `linear-gradient(135deg, ${levelColor.bg} 0%, ${levelColor.bg}cc 100%)`),
                     color: dragPath.includes(index) ? '#FFFFFF' : (hardModeActive ? '#FCA5A5' : COLORS.text),
                     cursor: 'pointer',
                     boxShadow: dragPath.includes(index) 
                       ? (hardModeActive
                           ? `0 0 25px #DC2626AA, 0 0 40px #991B1B66, inset 0 2px 8px rgba(255,255,255,0.3)`
-                          : `0 0 25px ${COLORS.primary}AA, 0 0 40px ${COLORS.accent}66, inset 0 2px 8px rgba(255,255,255,0.3)`)
+                          : `0 0 25px ${levelColor.selected}AA, 0 0 40px ${levelColor.border}66, inset 0 2px 8px rgba(255,255,255,0.3)`)
                       : `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1)`,
                     border: dragPath.includes(index)
-                      ? (hardModeActive ? `2px solid #DC262688` : `2px solid ${COLORS.highlight}88`)
-                      : (hardModeActive ? `2px solid #7f1d1d22` : `2px solid ${COLORS.secondary}22`),
+                      ? (hardModeActive ? `2px solid #DC262688` : `2px solid ${levelColor.selected}`)
+                      : (hardModeActive ? `2px solid #7f1d1d22` : `2px solid ${levelColor.border}44`),
                     touchAction: 'none',
                     userSelect: 'none',
                     WebkitUserSelect: 'none',
@@ -1815,15 +2096,37 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                   onMouseDown={(e) => !isShuffling && handleMouseDown(e, pos.letter, pos)}
                   onTouchStart={(e) => !isShuffling && handleTouchStart(e, pos.letter, pos)}
                 >
-                  {pos.letter}
+                  {pos.letter === ' ' ? (
+                    <span className="text-base opacity-60">␣</span>
+                  ) : pos.letter}
                 </motion.button>
+                  );
+                })()}
               </div>
             ))}
           </div>
         </div>
 
         {/* Bottom buttons - Fixed at bottom */}
-        <div className="fixed bottom-16 left-0 right-0 flex justify-center gap-6 mb-4 z-50">
+        {(() => {
+          // Butonlar için levelColor tanımı - çember harfleriyle aynı
+          const levelColors = [
+            { bg: '#1a1a2e', border: '#4a4a6a', selected: '#6a6a9a' }, // Koyu lacivert
+            { bg: '#16213e', border: '#3a5a8a', selected: '#5a8aba' }, // Koyu mavi
+            { bg: '#1a1a3a', border: '#5a4a8a', selected: '#8a7aba' }, // Koyu mor
+            { bg: '#0f3460', border: '#4a7a9a', selected: '#6aaaca' }, // Koyu turkuaz
+            { bg: '#2d132c', border: '#6a3a6a', selected: '#9a6a9a' }, // Koyu magenta
+            { bg: '#1e3a3a', border: '#4a8a7a', selected: '#6ababa' }, // Koyu yeşil
+            { bg: '#3a1a1a', border: '#8a4a4a', selected: '#ba7a7a' }, // Koyu kırmızı
+            { bg: '#2a2a1a', border: '#7a7a4a', selected: '#aaba7a' }, // Koyu sarı
+          ];
+          const colorIndex = (level.id - 1) % levelColors.length;
+          const levelColor = hardModeActive 
+            ? { bg: '#3a1a1a', border: '#991b1b', selected: '#ef4444' }
+            : levelColors[colorIndex];
+          
+          return (
+        <div className="fixed bottom-10 left-0 right-0 flex justify-center gap-6 mb-4 z-50">
           <motion.button
             className="w-14 h-14 rounded-full flex items-center justify-center"
             style={{
@@ -1851,22 +2154,22 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
           <motion.button
             className={`w-14 h-14 rounded-full flex items-center justify-center relative ${highlightedButton === 'hint' ? 'z-50' : ''}`}
             style={{
-              background: diamonds >= 5 ? 
+              background: diamonds >= 20 ? 
                 (hardModeActive 
                   ? `linear-gradient(135deg, #DC2626 0%, #991B1B 100%)`
-                  : `linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)`)
+                  : `linear-gradient(135deg, ${levelColor.border} 0%, ${levelColor.selected} 100%)`)
                 : 'linear-gradient(135deg, #555 0%, #333 100%)',
               boxShadow: highlightedButton === 'hint' 
                 ? '0 0 30px #FCD34D, 0 0 60px #F59E0B, 0 0 90px #FCD34D'
-                : (diamonds >= 5 ? 
+                : (diamonds >= 20 ? 
                   '0 4px 10px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3)' : 
                   '0 2px 5px rgba(0,0,0,0.2)'),
               border: highlightedButton === 'hint'
                 ? '3px solid #FCD34D'
-                : (diamonds >= 5 ? 
+                : (diamonds >= 20 ? 
                   '2px solid rgba(255,255,255,0.2)' : 
                   '2px solid rgba(255,255,255,0.1)'),
-              opacity: (highlightedButton && highlightedButton !== 'hint') ? 0.3 : (diamonds >= 5 ? 1 : 0.5),
+              opacity: (highlightedButton && highlightedButton !== 'hint') ? 0.3 : (diamonds >= 20 ? 1 : 0.5),
               transition: 'all 0.3s ease'
             }}
             animate={highlightedButton === 'hint' ? {
@@ -1894,18 +2197,18 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
               duration: 1.2,
               ease: "easeInOut"
             } : {}}
-            whileHover={diamonds >= 5 && !showHintAnimation && !highlightedButton ? { 
+            whileHover={diamonds >= 20 && !showHintAnimation && !highlightedButton ? { 
               scale: 1.05,
               boxShadow: '0 6px 15px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3)'
             } : {}}
-            whileTap={diamonds >= 5 && !showHintAnimation && (!highlightedButton || highlightedButton === 'hint') ? { scale: 0.95 } : {}}
+            whileTap={diamonds >= 20 && !showHintAnimation && (!highlightedButton || highlightedButton === 'hint') ? { scale: 0.95 } : {}}
             onClick={() => {
               // Başka bir buton highlight edilmişse tıklamayı engelle
               if (highlightedButton && highlightedButton !== 'hint') return;
               handleHint();
               if (highlightedButton === 'hint') setHighlightedButton(null);
             }}
-            disabled={diamonds < 5 || (highlightedButton && highlightedButton !== 'hint')}
+            disabled={diamonds < 20 || (highlightedButton && highlightedButton !== 'hint')}
           >
             <div className="flex flex-col items-center justify-center">
               {/* Elmas simgesi */}
@@ -1920,13 +2223,10 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                   ease: "easeInOut"
                 } : {}}
               >
-                <motion.svg 
-                  width="20" 
-                  height="20" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  xmlns="http://www.w3.org/2000/svg"
+                <motion.span
+                  className="text-3xl"
                   animate={showHintAnimation ? {
+                    scale: [1, 1.3, 1],
                     filter: [
                       'drop-shadow(0 0 0px #FCD34D)',
                       'drop-shadow(0 0 8px #FCD34D)',
@@ -1939,35 +2239,16 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                     duration: 1.2,
                     ease: "easeInOut"
                   } : {}}
+                  style={{ opacity: diamonds >= 20 ? 1 : 0.5 }}
                 >
-                  <circle cx="12" cy="12" r="5" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="2"/>
-                  <line x1="12" y1="4" x2="12" y2="2" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="12" y1="22" x2="12" y2="20" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="4" y1="12" x2="2" y2="12" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="22" y1="12" x2="20" y2="12" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="6.34" y1="6.34" x2="4.93" y2="4.93" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="19.07" y1="19.07" x2="17.66" y2="17.66" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="6.34" y1="17.66" x2="4.93" y2="19.07" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="19.07" y1="4.93" x2="17.66" y2="6.34" stroke={diamonds >= 5 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                </motion.svg>
+                  💡
+                </motion.span>
               </motion.div>
               
               {/* Sayı göstergesi */}
-              <div className="flex items-center">
-                <span className="text-sm font-bold mr-1">5</span>
-                <motion.span 
-                  className="text-sm"
-                  animate={showHintAnimation ? {
-                    scale: [1, 1.3, 1.2, 1.3, 1],
-                    rotate: [0, 10, -10, 5, 0]
-                  } : {}}
-                  transition={showHintAnimation ? {
-                    duration: 1.2,
-                    ease: "easeInOut"
-                  } : {}}
-                >
-                  💎
-                </motion.span>
+              <div className="flex items-center" style={{ fontSize: '13px', marginTop: '-8px', marginLeft: '2px' }}>
+                <span className="font-bold">20</span>
+                <span style={{ fontSize: '10px' }}>💎</span>
               </div>
             </div>
             {/* Highlight parmak animasyonu */}
@@ -2139,22 +2420,22 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
           <motion.button
             className={`w-14 h-14 rounded-full flex items-center justify-center relative ${highlightedButton === 'fairy' ? 'z-50' : ''}`}
             style={{
-              background: diamonds >= 15 ? 
+              background: diamonds >= 60 ? 
                 (hardModeActive
                   ? `linear-gradient(135deg, #DC2626 0%, #991B1B 100%)`
-                  : `linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)`)
+                  : `linear-gradient(135deg, ${levelColor.border} 0%, ${levelColor.selected} 100%)`)
                 : 'linear-gradient(135deg, #555 0%, #333 100%)',
               boxShadow: highlightedButton === 'fairy'
                 ? '0 0 30px #FF69B4, 0 0 60px #FFB6C1, 0 0 90px #FF69B4'
-                : (diamonds >= 15 ? 
+                : (diamonds >= 60 ? 
                   '0 4px 10px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3)' : 
                   '0 2px 5px rgba(0,0,0,0.2)'),
               border: highlightedButton === 'fairy'
                 ? '3px solid #FF69B4'
-                : (diamonds >= 15 ? 
+                : (diamonds >= 60 ? 
                   '2px solid rgba(255,255,255,0.2)' : 
                   '2px solid rgba(255,255,255,0.1)'),
-              opacity: (highlightedButton && highlightedButton !== 'fairy') ? 0.3 : (diamonds >= 15 ? 1 : 0.5),
+              opacity: (highlightedButton && highlightedButton !== 'fairy') ? 0.3 : (diamonds >= 60 ? 1 : 0.5),
               transition: 'all 0.3s ease'
             }}
             animate={highlightedButton === 'fairy' ? {
@@ -2182,18 +2463,18 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
               duration: 1.5,
               ease: "easeInOut"
             } : {}}
-            whileHover={diamonds >= 15 && !showFairyAnimation && !highlightedButton ? { 
+            whileHover={diamonds >= 60 && !showFairyAnimation && !highlightedButton ? { 
               scale: 1.05,
               boxShadow: '0 6px 15px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3)'
             } : {}}
-            whileTap={diamonds >= 15 && !showFairyAnimation && (!highlightedButton || highlightedButton === 'fairy') ? { scale: 0.95 } : {}}
+            whileTap={diamonds >= 60 && !showFairyAnimation && (!highlightedButton || highlightedButton === 'fairy') ? { scale: 0.95 } : {}}
             onClick={() => {
               // Başka bir buton highlight edilmişse tıklamayı engelle
               if (highlightedButton && highlightedButton !== 'fairy') return;
               handleFairyJoker();
               if (highlightedButton === 'fairy') setHighlightedButton(null);
             }}
-            disabled={diamonds < 15 || fairyJokerUsed || (highlightedButton && highlightedButton !== 'fairy')}
+            disabled={diamonds < 60 || fairyJokerUsed || (highlightedButton && highlightedButton !== 'fairy')}
           >
             <div className="flex flex-col items-center justify-center">
               {/* Peri kızı simgesi */}
@@ -2208,12 +2489,8 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                   ease: "easeInOut"
                 } : {}}
               >
-                <motion.svg 
-                  width="20" 
-                  height="20" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  xmlns="http://www.w3.org/2000/svg"
+                <motion.span
+                  className="text-3xl"
                   animate={showFairyAnimation ? {
                     scale: [1, 1.2, 1, 1.1, 1],
                     filter: [
@@ -2228,19 +2505,17 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                     duration: 1.5,
                     ease: "easeInOut"
                   } : {}}
+                  style={{ opacity: diamonds >= 60 ? 1 : 0.5 }}
                 >
-                  <path d="M12 2L14 6L19 7L15.5 10.5L16 15L12 13L8 15L8.5 10.5L5 7L10 6L12 2Z" stroke={diamonds >= 15 ? "white" : "#777"} strokeWidth="2" strokeLinejoin="round"/>
-                  <path d="M12 13L14 20M12 13L10 20" stroke={diamonds >= 15 ? "white" : "#777"} strokeWidth="2" strokeLinecap="round"/>
-                  <path d="M8 9C7.5 8 6.5 7.5 5 8.5" stroke={diamonds >= 15 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M16 9C16.5 8 17.5 7.5 19 8.5" stroke={diamonds >= 15 ? "white" : "#777"} strokeWidth="1.5" strokeLinecap="round"/>
-                </motion.svg>
+                  🧚
+                </motion.span>
               </motion.div>
               
               {/* Sayı göstergesi */}
-              <div className="flex items-center">
-                <span className="text-xs font-bold mr-1">15</span>
+              <div className="flex items-center" style={{ marginTop: '-8px', marginLeft: '2px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '1px' }}>60</span>
                 <motion.span 
-                  className="text-xs"
+                  style={{ fontSize: '10px' }}
                   animate={showFairyAnimation ? {
                     scale: [1, 1.3, 1, 1.2, 1],
                     rotate: [0, 10, -10, 5, 0]
@@ -2250,7 +2525,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                     ease: "easeInOut"
                   } : {}}
                 >
-                  🧚‍♀️
+                  💎
                 </motion.span>
               </div>
             </div>
@@ -2272,7 +2547,7 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
             style={{
               background: hardModeActive 
                 ? `linear-gradient(135deg, #DC2626 0%, #991B1B 100%)`
-                : `linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)`,
+                : `linear-gradient(135deg, ${levelColor.border} 0%, ${levelColor.selected} 100%)`,
               boxShadow: highlightedButton === 'shuffle'
                 ? '0 0 30px #10B981, 0 0 60px #059669, 0 0 90px #10B981'
                 : '0 4px 10px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3)',
@@ -2343,30 +2618,15 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
             )}
           </motion.button>
         </div>
+          );
+        })()}
 
         {/* Empty space at bottom */}
         <div className="h-24"></div>
       </div>
 
       {/* Success Animation */}
-      <AnimatePresence>
-        {showSuccess && (
-          <motion.div
-            className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.5 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div 
-              className="text-6xl"
-              style={{ color: COLORS.success }}
-            >
-              ✨
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Success Animation - Kaldırıldı, yeni kelime animasyonu kullanılıyor */}
 
       {/* Error Animation - Titreyen Harfler */}
       <AnimatePresence>
@@ -2474,13 +2734,24 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
       <AnimatePresence>
         {showFairyAnimation && (
           <div className="fixed inset-0 z-50 pointer-events-none">
+            {/* Peri etrafında hafif arka plan ışığı - mevcut ışıklardan biraz daha geniş */}
+            <motion.div
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                background: `radial-gradient(circle at 77% 14%, ${currentLevelColor.glow}40 0%, ${currentLevelColor.glow}20 15%, transparent 25%)`
+              }}
+            />
+            
             {/* Kelime kutusunun sağında beliren peri */}
             <motion.div
               className="absolute"
               style={{ 
-                top: '14%', 
-                left: '63%',
-                transform: 'translate(220px, 10px)',
+                top: '22%', 
+                left: '77%',
+                transform: 'translate(30px, 10px)',
               }}
               initial={{ scale: 0, opacity: 0, x: -50, rotate: -180 }}
               animate={{ scale: 1, opacity: 1, x: 0, rotate: 0 }}
@@ -2491,11 +2762,11 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                 <motion.img 
                   src="/assets/joker.png" 
                   alt="Joker" 
-                  className="w-40 h-40 object-contain relative z-10"
+                  className="w-20 h-20 object-contain relative z-10"
                   animate={{
-                    y: [0, -15, 0],
-                    scale: [1, 1.1, 1],
-                    rotate: [0, 5, -5, 0]
+                    y: [0, -8, 0],
+                    scale: [1, 1.05, 1],
+                    rotate: [0, 2, -2, 0]
                   }}
                   transition={{
                     duration: 2.5,
@@ -2508,16 +2779,16 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                 {[...Array(8)].map((_, i) => (
                   <motion.div
                     key={`star-${i}`}
-                    className="absolute text-2xl"
+                    className="absolute text-base"
                     style={{
                       left: '50%',
                       top: '50%'
                     }}
                     animate={{
-                      x: Math.cos((i / 8) * Math.PI * 2) * 60,
-                      y: Math.sin((i / 8) * Math.PI * 2) * 60,
+                      x: Math.cos((i / 8) * Math.PI * 2) * 32,
+                      y: Math.sin((i / 8) * Math.PI * 2) * 32,
                       rotate: [0, 360],
-                      scale: [1, 1.3, 1]
+                      scale: [1, 1.1, 1]
                     }}
                     transition={{
                       duration: 3,
@@ -2530,20 +2801,20 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                 ))}
               </div>
               
-              {/* Çoklu parlayan ışık efektleri */}
+              {/* Çoklu parlayan ışık efektleri - Bölüm rengine göre (küçültülmüş) */}
               <motion.div 
                 className="absolute inset-0 rounded-full" 
                 style={{ 
-                  background: 'radial-gradient(circle, rgba(255,182,193,0.8) 0%, rgba(255,105,180,0.4) 50%, rgba(255,105,180,0) 70%)',
-                  width: '150%',
-                  height: '150%',
-                  top: '-25%',
-                  left: '-25%',
+                  background: `radial-gradient(circle, ${currentLevelColor.light} 0%, ${currentLevelColor.glow} 50%, ${currentLevelColor.glow}00 70%)`,
+                  width: '120%',
+                  height: '120%',
+                  top: '-10%',
+                  left: '-10%',
                   zIndex: -1
                 }}
                 animate={{ 
-                  scale: [1, 1.3, 1],
-                  opacity: [0.6, 1, 0.6],
+                  scale: [1, 1.2, 1],
+                  opacity: [0.9, 1, 0.9],
                   rotate: [0, 180, 360]
                 }}
                 transition={{ 
@@ -2553,20 +2824,20 @@ const WordPuzzle = ({ level, onComplete, onClose, onNext, diamonds, useDiamond, 
                 }}
               />
               
-              {/* İkinci ışık katmanı */}
+              {/* İkinci ışık katmanı - Bölüm rengine göre (küçültülmüş) */}
               <motion.div 
                 className="absolute inset-0 rounded-full" 
                 style={{ 
-                  background: 'radial-gradient(circle, rgba(255,215,0,0.6) 0%, rgba(255,105,180,0.3) 50%, rgba(138,43,226,0) 70%)',
-                  width: '130%',
-                  height: '130%',
-                  top: '-15%',
-                  left: '-15%',
+                  background: `radial-gradient(circle, ${currentLevelColor.glow} 0%, ${currentLevelColor.main}cc 50%, ${currentLevelColor.main}00 70%)`,
+                  width: '100%',
+                  height: '100%',
+                  top: '0%',
+                  left: '0%',
                   zIndex: -2
                 }}
                 animate={{ 
-                  scale: [1.2, 1, 1.2],
-                  opacity: [0.5, 0.8, 0.5],
+                  scale: [1.1, 1, 1.1],
+                  opacity: [0.8, 1, 0.8],
                   rotate: [360, 180, 0]
                 }}
                 transition={{ 

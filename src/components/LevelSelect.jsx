@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { playSound } from '../utils/SoundManager';
 import { exampleSentences } from '../data/exampleSentences';
+import { getAnimationConfig, getTransitionConfig } from '../utils/graphicsConfig';
 
 const LEVELS_PER_PAGE = 26;
 
@@ -18,6 +19,7 @@ const LevelSelect = ({
 }) => {
   const scrollRef = useRef(null);
   const [language] = useState(() => localStorage.getItem('language') || 'tr');
+  const [graphicsQuality, setGraphicsQuality] = useState(() => localStorage.getItem('graphicsQuality') || 'high');
 
   const translations = {
     tr: {
@@ -60,7 +62,7 @@ const LevelSelect = ({
   const [highlightedLevelId, setHighlightedLevelId] = useState(null);
   const [showTransition, setShowTransition] = useState(false);
   const [transitionLevel, setTransitionLevel] = useState(null);
-  const [layoutMode, setLayoutMode] = useState(() => localStorage.getItem('levelLayoutMode') || 'grid'); // 'grid' or 'list'
+  const [layoutMode, setLayoutMode] = useState(() => localStorage.getItem('levelLayoutMode') || 'list'); // 'grid' or 'list'
   const levelRefs = useRef({});
   
   // Kullanıcının erişebileceği maksimum sayfa (açık bölümlere göre)
@@ -92,7 +94,22 @@ const LevelSelect = ({
     }
   }, [currentPage]);
 
+  // Grafik kalitesi değişikliğini dinle
+  useEffect(() => {
+    const handleGraphicsQualityChange = (e) => {
+      setGraphicsQuality(e.detail?.quality || localStorage.getItem('graphicsQuality') || 'high');
+    };
+    
+    window.addEventListener('graphicsQualityChange', handleGraphicsQualityChange);
+    
+    return () => {
+      window.removeEventListener('graphicsQualityChange', handleGraphicsQualityChange);
+    };
+  }, []);
+
   const progressPercent = Math.round((completedLevels.size / levels.length) * 100);
+  // graphicsQuality state'ini doğrudan kullan
+  const showBackgroundAnimations = graphicsQuality === 'high';
 
   return (
     <div 
@@ -111,15 +128,22 @@ const LevelSelect = ({
           display: none;
         }
       `}</style>
-      {/* Dark Premium Background with Bokeh */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-20 left-10 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-40 right-10 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
-      </div>
+      {/* Dark Premium Background with Bokeh - Sadece yüksek kalitede */}
+      {showBackgroundAnimations && (
+        <div className="fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute top-20 left-10 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-40 right-10 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
 
       {/* Glass Header - Mobile Optimized with Colorful Design */}
-      <div className="sticky top-0 z-50 bg-white/5 backdrop-blur-2xl border-b border-white/10">
+      <div 
+        className="sticky top-0 z-50 bg-white/5 backdrop-blur-2xl border-b border-white/10"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)'
+        }}
+      >
         <div className="max-w-lg mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             {/* Gradient Back Button */}

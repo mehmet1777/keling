@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playSound } from '../utils/SoundManager';
+import { getAnimationConfig, getTransitionConfig } from '../utils/graphicsConfig';
+import { speak, speakWord } from '../utils/ttsService';
 
 const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) => {
   const [language] = useState(() => localStorage.getItem('language') || 'tr');
   const [englishMode] = useState(() => localStorage.getItem('englishMode') === 'true');
+  const [graphicsQuality] = useState(() => localStorage.getItem('graphicsQuality') || 'high');
   const [selectedBox, setSelectedBox] = useState(null);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
@@ -333,43 +336,7 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
 
   const t = translations[language];
 
-  const speak = (text, lang) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = lang === 'tr-TR' ? 0.75 : 0.85;
-    
-    // Ayarlardan ses cinsiyetini al
-    const voiceGender = localStorage.getItem('voiceGender') || 'male';
-    
-    // Pitch ayarı - sadece Türkçe için değiştir, İngilizce David'i olduğu gibi bırak
-    if (lang === 'tr-TR') {
-      utterance.pitch = voiceGender === 'male' ? 0.5 : 1.3;
-    } else {
-      utterance.pitch = 1.0; // İngilizce için normal pitch (David'in orijinal sesi)
-    }
-    
-    // Uygun sesi seç
-    const allVoices = window.speechSynthesis.getVoices();
-    
-    if (lang === 'tr-TR') {
-      const turkishVoices = allVoices.filter(voice => voice.lang.startsWith('tr'));
-      const turkishVoice = voiceGender === 'male' 
-        ? turkishVoices[0] 
-        : turkishVoices[turkishVoices.length > 1 ? 1 : 0];
-      if (turkishVoice) utterance.voice = turkishVoice;
-    } else {
-      const englishVoice = allVoices.find(voice => 
-        voice.lang.startsWith('en') && 
-        (voiceGender === 'male' 
-          ? (voice.name.includes('Male') || voice.name.includes('David') || voice.name.includes('Mark') || voice.name.includes('Daniel'))
-          : (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria') || voice.name.includes('Karen') || voice.name.includes('Zira'))
-        )
-      ) || allVoices.find(voice => voice.lang.startsWith('en'));
-      if (englishVoice) utterance.voice = englishVoice;
-    }
-    
-    window.speechSynthesis.speak(utterance);
-  };
+  // speak fonksiyonu ttsService'den import edildi
 
   const handleBoxSelect = (box) => {
     // Eğer kutu tamamlanmışsa ve geçmiş varsa modal göster
@@ -489,7 +456,7 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
         // englishMode true (İngilizce→Türkçe): Türkçe yazdın → Türkçe telaffuz
         const textToSpeak = englishMode ? currentWord.turkish : currentWord.english;
         const langToSpeak = englishMode ? 'tr-TR' : 'en-US';
-        speak(textToSpeak, langToSpeak);
+        speakWord(currentWord.turkish, textToSpeak, langToSpeak);
         
         // 1.5 saniye sonra Devam Et butonu göster
         setTimeout(() => {
@@ -540,9 +507,10 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
         setBoxCurrentIndex(newBoxCurrentIndex);
         localStorage.setItem('wordBoxCurrentIndex', JSON.stringify(newBoxCurrentIndex));
         
-        // Progress'i sıfırla (yeni tur için)
+        // Progress'i sıfırla ve reviewCount'u artır (yeni tur için)
         const newProgress = { ...boxProgress };
         newProgress[selectedBox.id].completed = [];
+        newProgress[selectedBox.id].reviewCount = (newProgress[selectedBox.id].reviewCount || 0) + 1;
         setBoxProgress(newProgress);
         localStorage.setItem('wordBoxProgress', JSON.stringify(newProgress));
         
@@ -664,32 +632,32 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
               <div className="text-center mb-3">
                 <motion.div 
                   className="text-xl sm:text-2xl mb-1.5"
-                  animate={{
+                  animate={graphicsQuality !== 'low' ? {
                     scale: [1, 1.1, 1],
                     rotate: [0, 5, -5, 0],
-                  }}
-                  transition={{
+                  } : {}}
+                  transition={graphicsQuality !== 'low' ? {
                     duration: 2,
                     repeat: Infinity,
                     ease: "easeInOut",
-                  }}
+                  } : {}}
                 >
                   {englishMode ? '🇬🇧' : '🇹🇷'}
                 </motion.div>
                 <motion.h2 
                   className="text-xl sm:text-2xl font-bold text-white mb-2"
-                  animate={{
+                  animate={graphicsQuality === 'high' ? {
                     textShadow: [
                       '0 0 10px rgba(168, 85, 247, 0.5)',
                       '0 0 20px rgba(168, 85, 247, 0.8)',
                       '0 0 10px rgba(168, 85, 247, 0.5)',
                     ],
-                  }}
-                  transition={{
+                  } : {}}
+                  transition={graphicsQuality === 'high' ? {
                     duration: 2,
                     repeat: Infinity,
                     ease: "easeInOut",
-                  }}
+                  } : {}}
                 >
                   {englishMode ? currentWord.english : currentWord.turkish}
                 </motion.h2>
@@ -698,25 +666,25 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                     playSound('telefontıklama.mp3');
                     const textToSpeak = englishMode ? currentWord.english : currentWord.turkish;
                     const lang = englishMode ? 'en-US' : 'tr-TR';
-                    speak(textToSpeak, lang);
+                    speakWord(currentWord.turkish, textToSpeak, lang);
                   }}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-purple-600/30 to-pink-600/30 hover:from-purple-600/50 hover:to-pink-600/50 rounded-lg text-white/90 transition-all text-xs border border-purple-400/30"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={graphicsQuality !== 'low' ? { scale: 1.05 } : {}}
+                  whileTap={graphicsQuality !== 'low' ? { scale: 0.95 } : {}}
                 >
                   <motion.svg 
                     className="w-3 h-3" 
                     fill="none" 
                     viewBox="0 0 24 24" 
                     stroke="currentColor"
-                    animate={{
+                    animate={graphicsQuality !== 'low' ? {
                       scale: [1, 1.2, 1],
-                    }}
-                    transition={{
+                    } : {}}
+                    transition={graphicsQuality !== 'low' ? {
                       duration: 1.5,
                       repeat: Infinity,
                       ease: "easeInOut",
-                    }}
+                    } : {}}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                   </motion.svg>
@@ -742,6 +710,7 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       }
                     }}
                     disabled={showResult && isCorrect}
+                    maxLength={50}
                     className="w-full px-3 py-2.5 bg-black/30 border-2 border-white/20 rounded-xl text-white text-base sm:text-lg font-medium placeholder:text-white/40 focus:outline-none focus:border-purple-400 focus:bg-black/40 disabled:opacity-50 transition-colors"
                     placeholder={t.typeYourAnswer}
                     autoComplete="off"
@@ -812,7 +781,7 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                               setShowTranslation(true);
                               const textToSpeak = englishMode ? currentWord.turkish : currentWord.english;
                               const langToSpeak = englishMode ? 'tr-TR' : 'en-US';
-                              speak(textToSpeak, langToSpeak);
+                              speakWord(currentWord.turkish, textToSpeak, langToSpeak);
                               
                               // Devam Et butonu göster
                               setTimeout(() => {
@@ -839,31 +808,33 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       transition={{ type: "spring", stiffness: 300, damping: 20 }}
                       className="relative bg-gradient-to-br from-indigo-900/40 via-blue-900/40 to-indigo-900/40 backdrop-blur-xl border border-blue-400/30 rounded-xl p-3 shadow-xl overflow-hidden"
                     >
-                      {/* Parıltı Efekti */}
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-                        animate={{
-                          x: ['-100%', '200%'],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                      />
+                      {/* Parıltı Efekti - sadece yüksek kalitede */}
+                      {graphicsQuality === 'high' && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                          animate={{
+                            x: ['-100%', '200%'],
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
+                        />
+                      )}
                       
                       {/* İçerik */}
                       <div className="relative z-10 text-center">
                         <div className="flex items-center justify-center gap-2 mb-1.5">
                           <motion.span
                             className="text-lg"
-                            animate={{
+                            animate={graphicsQuality !== 'low' ? {
                               scale: [1, 1.1, 1],
-                            }}
-                            transition={{
+                            } : {}}
+                            transition={graphicsQuality !== 'low' ? {
                               duration: 2,
                               repeat: Infinity,
-                            }}
+                            } : {}}
                           >
                             {englishMode ? '🇹🇷' : '🇬🇧'}
                           </motion.span>
@@ -871,18 +842,18 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                         </div>
                         <motion.h3 
                           className="text-lg sm:text-xl font-bold text-white mb-2"
-                          animate={{
+                          animate={graphicsQuality === 'high' ? {
                             textShadow: [
                               '0 0 10px rgba(96, 165, 250, 0.5)',
                               '0 0 15px rgba(96, 165, 250, 0.7)',
                               '0 0 10px rgba(96, 165, 250, 0.5)',
                             ],
-                          }}
-                          transition={{
+                          } : {}}
+                          transition={graphicsQuality === 'high' ? {
                             duration: 2,
                             repeat: Infinity,
                             ease: "easeInOut",
-                          }}
+                          } : {}}
                         >
                           {englishMode ? currentWord.turkish : currentWord.english}
                         </motion.h3>
@@ -891,11 +862,11 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                             playSound('telefontıklama.mp3');
                             const textToSpeak = englishMode ? currentWord.turkish : currentWord.english;
                             const langToSpeak = englishMode ? 'tr-TR' : 'en-US';
-                            speak(textToSpeak, langToSpeak);
+                            speakWord(currentWord.turkish, textToSpeak, langToSpeak);
                           }}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-600/30 to-indigo-600/30 hover:from-blue-600/50 hover:to-indigo-600/50 rounded-lg text-white/90 transition-all text-xs border border-blue-400/30"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
+                          whileHover={graphicsQuality !== 'low' ? { scale: 1.05 } : {}}
+                          whileTap={graphicsQuality !== 'low' ? { scale: 0.95 } : {}}
                         >
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -925,20 +896,22 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                         damping: 25
                       }}
                       className="relative w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-white text-base font-bold shadow-lg overflow-hidden"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={graphicsQuality !== 'low' ? { scale: 1.02 } : {}}
+                      whileTap={graphicsQuality !== 'low' ? { scale: 0.98 } : {}}
                     >
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                        animate={{
-                          x: ['-100%', '200%'],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                      />
+                      {graphicsQuality === 'high' && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                          animate={{
+                            x: ['-100%', '200%'],
+                          }}
+                          transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
+                        />
+                      )}
                       <span className="relative z-10">{t.continueButton}</span>
                     </motion.button>
                   ) : !showResult || !isCorrect ? (
@@ -953,20 +926,22 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       className="relative w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-white text-base font-bold shadow-lg disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden"
-                      whileHover={{ scale: !userAnswer.trim() ? 1 : 1.02 }}
-                      whileTap={{ scale: !userAnswer.trim() ? 1 : 0.98 }}
+                      whileHover={graphicsQuality !== 'low' ? { scale: !userAnswer.trim() ? 1 : 1.02 } : {}}
+                      whileTap={graphicsQuality !== 'low' ? { scale: !userAnswer.trim() ? 1 : 0.98 } : {}}
                     >
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                        animate={{
-                          x: ['-100%', '200%'],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                      />
+                      {graphicsQuality === 'high' && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                          animate={{
+                            x: ['-100%', '200%'],
+                          }}
+                          transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
+                        />
+                      )}
                       <span className="relative z-10">{t.check}</span>
                     </motion.button>
                   ) : null}
@@ -978,31 +953,33 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
             {/* Kompakt İstatistik - Mobil Uyumlu */}
             <motion.div 
               className="bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-purple-900/40 backdrop-blur-xl rounded-xl p-2.5 shadow-xl border border-purple-400/30 overflow-hidden relative"
-              animate={{
+              animate={graphicsQuality === 'high' ? {
                 boxShadow: [
                   '0 0 15px rgba(168, 85, 247, 0.2)',
                   '0 0 25px rgba(168, 85, 247, 0.3)',
                   '0 0 15px rgba(168, 85, 247, 0.2)',
                 ],
-              }}
-              transition={{
+              } : {}}
+              transition={graphicsQuality === 'high' ? {
                 duration: 2,
                 repeat: Infinity,
                 ease: "easeInOut",
-              }}
+              } : {}}
             >
-              {/* Arka Plan Parıltısı */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent"
-                animate={{
-                  x: ['-100%', '200%'],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
-              />
+              {/* Arka Plan Parıltısı - sadece yüksek kalitede */}
+              {graphicsQuality === 'high' && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent"
+                  animate={{
+                    x: ['-100%', '200%'],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
+                />
+              )}
               
               {/* İçerik - Tek Satır */}
               <div className="relative z-10 flex items-center justify-between gap-2">
@@ -1012,14 +989,14 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                     <span className="text-xs text-white/60">📊</span>
                     <motion.span 
                       className="text-white font-bold text-sm"
-                      animate={{
+                      animate={graphicsQuality !== 'low' ? {
                         scale: [1, 1.05, 1],
-                      }}
-                      transition={{
+                      } : {}}
+                      transition={graphicsQuality !== 'low' ? {
                         duration: 2,
                         repeat: Infinity,
                         ease: "easeInOut",
-                      }}
+                      } : {}}
                     >
                       %{Math.round((wordProgress.completed.length / wordProgress.total) * 100)}
                     </motion.span>
@@ -1448,7 +1425,12 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
 
       {/* Sticky Header */}
       {/* Sticky Üst Butonlar - Geri, Kelime Sayısı, Layout Toggle ve Yardım - Mobile Optimized */}
-      <div className="sticky top-0 z-40 w-full bg-gradient-to-b from-[#1a1a3e] via-[#1a1a3e]/95 to-transparent pb-2 pt-3 sm:pt-4 md:pt-8 px-3 sm:px-4 md:px-8">
+      <div 
+        className="sticky top-0 z-40 w-full bg-gradient-to-b from-[#1a1a3e] via-[#1a1a3e]/95 to-transparent pb-2 px-3 sm:px-4 md:px-8"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)'
+        }}
+      >
         <div className="w-full max-w-4xl mx-auto">
           <div className="flex justify-between items-center gap-2">
             <motion.button
@@ -1817,29 +1799,29 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                 {box.isLocked ? (
                   <motion.span 
                     className="text-2xl"
-                    animate={{
+                    animate={graphicsQuality !== 'low' ? {
                       scale: [1, 1.1, 1],
-                    }}
-                    transition={{
+                    } : {}}
+                    transition={graphicsQuality !== 'low' ? {
                       duration: 2,
                       repeat: Infinity,
                       ease: "easeInOut",
-                    }}
+                    } : {}}
                   >
                     🔒
                   </motion.span>
                 ) : box.isCompleted && (
                   <motion.span 
                     className="text-2xl"
-                    animate={{
+                    animate={graphicsQuality !== 'low' ? {
                       scale: [1, 1.2, 1],
                       rotate: [0, 10, -10, 0],
-                    }}
-                    transition={{
+                    } : {}}
+                    transition={graphicsQuality !== 'low' ? {
                       duration: 2,
                       repeat: Infinity,
                       ease: "easeInOut",
-                    }}
+                    } : {}}
                   >
                     ✅
                   </motion.span>
@@ -1854,14 +1836,14 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       <span className="text-white/80 font-medium">{box.completed}/{box.total} {t.words}</span>
                       <motion.span 
                         className="text-purple-300 font-bold"
-                        animate={{
+                        animate={graphicsQuality !== 'low' ? {
                           scale: [1, 1.1, 1],
-                        }}
-                        transition={{
+                        } : {}}
+                        transition={graphicsQuality !== 'low' ? {
                           duration: 2,
                           repeat: Infinity,
                           ease: "easeInOut",
-                        }}
+                        } : {}}
                       >
                         {Math.round((box.completed / box.total) * 100)}%
                       </motion.span>
@@ -1873,19 +1855,21 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                         animate={{ width: `${(box.completed / box.total) * 100}%` }}
                         transition={{ duration: 0.8, delay: index * 0.1 + 0.2, ease: "easeOut" }}
                       />
-                      {/* Parlayan Efekt */}
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                        animate={{
-                          x: ['-100%', '200%'],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: "linear",
-                      delay: index * 0.5,
-                    }}
-                  />
+                      {/* Parlayan Efekt - sadece yüksek kalitede */}
+                      {graphicsQuality === 'high' && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                          animate={{
+                            x: ['-100%', '200%'],
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "linear",
+                            delay: index * 0.5,
+                          }}
+                        />
+                      )}
                 </div>
                   </>
                 ) : (
@@ -1895,14 +1879,14 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       <span className="text-white/80 font-medium text-xs sm:text-sm whitespace-nowrap">{box.completed}/{box.total} {t.words}</span>
                       <motion.span 
                         className="text-purple-300 font-bold text-sm sm:text-base"
-                        animate={{
+                        animate={graphicsQuality !== 'low' ? {
                           scale: [1, 1.1, 1],
-                        }}
-                        transition={{
+                        } : {}}
+                        transition={graphicsQuality !== 'low' ? {
                           duration: 2,
                           repeat: Infinity,
                           ease: "easeInOut",
-                        }}
+                        } : {}}
                       >
                         {Math.round((box.completed / box.total) * 100)}%
                       </motion.span>
@@ -1914,18 +1898,20 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                         animate={{ width: `${(box.completed / box.total) * 100}%` }}
                         transition={{ duration: 0.8, delay: index * 0.1 + 0.2, ease: "easeOut" }}
                       />
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                        animate={{
-                          x: ['-100%', '200%'],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: "linear",
-                          delay: index * 0.5,
-                        }}
-                      />
+                      {graphicsQuality === 'high' && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                          animate={{
+                            x: ['-100%', '200%'],
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "linear",
+                            delay: index * 0.5,
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -1939,18 +1925,18 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                       className={`inline-block text-green-300 font-bold bg-green-500/20 rounded-lg border border-green-400/30 whitespace-nowrap ${
                         layoutMode === 'grid' ? 'text-sm px-4 py-2' : 'text-xs px-2 py-1'
                       }`}
-                      animate={{
+                      animate={graphicsQuality === 'high' ? {
                         boxShadow: [
                           '0 0 10px rgba(74, 222, 128, 0.3)',
                           '0 0 20px rgba(74, 222, 128, 0.5)',
                           '0 0 10px rgba(74, 222, 128, 0.3)',
                         ],
-                      }}
-                      transition={{
+                      } : {}}
+                      transition={graphicsQuality === 'high' ? {
                         duration: 2,
                         repeat: Infinity,
                         ease: "easeInOut",
-                      }}
+                      } : {}}
                     >
                       ✅ {layoutMode === 'grid' ? `${box.completionHistory.length} ${t.timesCompleted}` : box.completionHistory.length}
                     </motion.span>
@@ -1972,18 +1958,18 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                     className={`inline-block text-yellow-300 font-bold bg-yellow-500/20 rounded-lg border border-yellow-400/30 whitespace-nowrap ${
                       layoutMode === 'grid' ? 'text-sm px-4 py-2' : 'text-xs px-2 py-1'
                     }`}
-                    animate={{
+                    animate={graphicsQuality === 'high' ? {
                       boxShadow: [
                         '0 0 10px rgba(250, 204, 21, 0.3)',
                         '0 0 20px rgba(250, 204, 21, 0.5)',
                         '0 0 10px rgba(250, 204, 21, 0.3)',
                       ],
-                    }}
-                    transition={{
+                    } : {}}
+                    transition={graphicsQuality === 'high' ? {
                       duration: 2,
                       repeat: Infinity,
                       ease: "easeInOut",
-                    }}
+                    } : {}}
                   >
                     🔄 {layoutMode === 'grid' ? t.inProgress : ''}
                   </motion.span>
@@ -2001,18 +1987,18 @@ const WordReview = ({ completedLevels, levels, onBackClick, onReviewComplete }) 
                 ) : (
                   <motion.span 
                     className="inline-block text-purple-300 text-sm font-bold bg-purple-500/20 px-4 py-2 rounded-lg border border-purple-400/30"
-                    animate={{
+                    animate={graphicsQuality === 'high' ? {
                       boxShadow: [
                         '0 0 10px rgba(168, 85, 247, 0.3)',
                         '0 0 20px rgba(168, 85, 247, 0.5)',
                         '0 0 10px rgba(168, 85, 247, 0.3)',
                       ],
-                    }}
-                    transition={{
+                    } : {}}
+                    transition={graphicsQuality === 'high' ? {
                       duration: 2,
                       repeat: Infinity,
                       ease: "easeInOut",
-                    }}
+                    } : {}}
                   >
                     ▶️ {t.start}
                   </motion.span>

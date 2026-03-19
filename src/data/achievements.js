@@ -91,6 +91,17 @@ export const levelAchievements = [
     target: 2000,
     reward: 1000,
     category: 'levels'
+  },
+  {
+    id: 'complete-2600-final',
+    type: 'level',
+    title: { tr: '🎊 FİNAL: 2600 Bölümü Tamamla', en: '🎊 FINAL: Complete Level 2600' },
+    description: { tr: 'Tüm bölümleri tamamla ve büyük final ödülünü kazan!', en: 'Complete all levels and win the grand final reward!' },
+    icon: '👑',
+    target: 2600,
+    reward: 78000,
+    category: 'levels',
+    isFinal: true
   }
 ];
 
@@ -338,35 +349,33 @@ export const checkDailyRepeatQuests = (claimedToday = []) => {
   }));
 };
 
-// Önerilen koleksiyonları bul (en az tekrar edilenler)
-export const getSuggestedCollections = (boxProgress, allBoxes) => {
+// Önerilen koleksiyonu bul (en az tekrar edilen 1 tane)
+export const getSuggestedCollections = (boxProgress, allBoxes, excludeIds = []) => {
   if (!allBoxes || allBoxes.length === 0) return [];
   
   // Her koleksiyonun tekrar sayısını hesapla
-  const collectionsWithCount = allBoxes.map(box => {
-    const progress = boxProgress[box.id] || {};
-    const repeatCount = progress.completionHistory ? progress.completionHistory.length : 0;
-    return {
-      ...box,
-      repeatCount
-    };
-  });
+  const collectionsWithCount = allBoxes
+    .filter(box => !excludeIds.includes(box.id)) // Daha önce önerilenleri hariç tut
+    .map(box => {
+      const progress = boxProgress[box.id] || {};
+      const repeatCount = progress.completionHistory ? progress.completionHistory.length : 0;
+      return {
+        ...box,
+        repeatCount
+      };
+    });
+  
+  if (collectionsWithCount.length === 0) return [];
   
   // En az tekrar sayısını bul
   const minRepeat = Math.min(...collectionsWithCount.map(c => c.repeatCount));
-  const maxRepeat = Math.max(...collectionsWithCount.map(c => c.repeatCount));
   
-  // Eğer tüm koleksiyonlar eşit tekrar edilmişse, rastgele 3 koleksiyon öner
-  if (minRepeat === maxRepeat) {
-    // Rastgele karıştır ve ilk 3'ü al
-    const shuffled = [...collectionsWithCount].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
-  }
+  // En az tekrar edilenleri bul
+  const leastRepeated = collectionsWithCount.filter(c => c.repeatCount === minRepeat);
   
-  // En az tekrar edilenleri bul ve 3 tanesini seç
-  const suggested = collectionsWithCount
-    .filter(c => c.repeatCount === minRepeat)
-    .slice(0, 3);
+  // En düşük numaralı koleksiyonu seç (Koleksiyon 1'den başla)
+  leastRepeated.sort((a, b) => a.number - b.number);
+  return [leastRepeated[0]];
   
   return suggested;
 };

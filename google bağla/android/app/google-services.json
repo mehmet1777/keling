@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "914621538684",
+    "project_id": "keling-baed0",
+    "storage_bucket": "keling-baed0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:914621538684:android:ea805494c451651539c4f9",
+        "android_client_info": {
+          "package_name": "com.keling.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "914621538684-m5s5rgle4lgcqoer0t9kkgu0aevg9a0g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.keling.app",
+            "certificate_hash": "eb156efb627fae5e4fa2438da1b8d0eb06428ca9"
+          }
+        },
+        {
+          "client_id": "914621538684-um6s6poke5vsm27p7k7ev2v9ahdhb5f1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuO0Ln-Yy2kn7DpSc68a4HjJFWhohw-I0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "914621538684-um6s6poke5vsm27p7k7ev2v9ahdhb5f1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -29,7 +29,7 @@ const soundCache = {};
 const playBackgroundMusic = () => {
   try {
     if (!backgroundMusic) {
-      backgroundMusic = new Audio('/sounds/oyunmuzik.mp3');
+      backgroundMusic = new Audio('./sounds/oyunmuzik.mp3');
       backgroundMusic.loop = true;
       backgroundMusic.id = 'backgroundMusic';
     }
@@ -84,7 +84,7 @@ const playHardModeMusic = () => {
     
     // Zor mod müziğini oluştur veya kullan
     if (!hardModeMusic) {
-      hardModeMusic = new Audio('/sounds/zormodmusic.mp3');
+      hardModeMusic = new Audio('./sounds/zormodmusic.mp3');
       hardModeMusic.loop = true;
       hardModeMusic.id = 'hardModeMusic';
     }
@@ -192,7 +192,7 @@ const playSound = (soundName, customVolume = null) => {
     let audio;
     if (isIOS()) {
       // iOS: Her seferinde yeni nesne
-      audio = new Audio(`/sounds/${soundName}.mp3`);
+      audio = new Audio(`./sounds/${soundName}.mp3`);
       audio.volume = effectsVolume;
     } else {
       // Diğer platformlar: Cache kullan
@@ -201,7 +201,7 @@ const playSound = (soundName, customVolume = null) => {
         audio.currentTime = 0;
         audio.volume = effectsVolume;
       } else {
-        audio = new Audio(`/sounds/${soundName}.mp3`);
+        audio = new Audio(`./sounds/${soundName}.mp3`);
         audio.volume = effectsVolume;
         soundCache[soundName] = audio;
       }

@@ -15,17 +15,16 @@ const Tutorial = ({ onComplete }) => {
       step2Title: "Elmas Kazan",
       step2Desc: "Her bölümü tamamladığında elmas kazanırsın! Hızlı bitirirsen bonus elmas! Elmasları joker almak için kullanabilirsin.",
       step3Title: "Jokerler",
-      step3Desc: "Takıldığında joker kullan! İpucu, Harf Göster veya Kelime Çöz. Her joker farklı miktarda elmas harcar.",
+      step3Desc: "Takıldığında joker kullan! İpucu jokeri bir harfi gösterir, Peri jokeri kelimeyi çözer. Her joker farklı miktarda elmas harcar.",
       step4Title: "Zor Mod",
-      step4Desc: "Daha fazla elmas için Zor Mod'u aç! 3 seviye zorluk var: Kolay (+2 harf), Orta (+4 harf), Zor (+6 harf). Daha fazla elmas kazan!",
+      step4Desc: "Daha fazla elmas için Zor Mod'u aç! 3 seviye zorluk var: Kolay (+1 harf), Orta (+2 harf), Zor (+4 harf). Daha fazla elmas kazan!",
       step5Title: "Kelime Bankası & Görevler",
       step5Desc: "Öğrendiğin kelimeleri Kelime Bankası'nda sakla ve tekrar et! Görevleri tamamla, ödül kazan. Günlük giriş bonusu al!",
       back: "Geri",
       next: "İleri",
       start: "Başla",
       hint: "İpucu",
-      showLetter: "Harf Göster",
-      solveWord: "Kelime Çöz",
+      fairy: "Peri",
       hardMode: "ZOR",
       moreGems: "Daha Fazla Elmas!",
       speedBonus: "Hız Bonusu!",
@@ -41,17 +40,16 @@ const Tutorial = ({ onComplete }) => {
       step2Title: "Earn Diamonds",
       step2Desc: "Earn diamonds when you complete each level! Finish fast for bonus diamonds! Use diamonds to buy jokers.",
       step3Title: "Jokers",
-      step3Desc: "Use jokers when stuck! Hint, Show Letter, or Solve Word. Each joker costs different amounts of diamonds.",
+      step3Desc: "Use jokers when stuck! Hint joker reveals a letter, Fairy joker solves the word. Each joker costs different amounts of diamonds.",
       step4Title: "Hard Mode",
-      step4Desc: "Turn on Hard Mode for more diamonds! 3 difficulty levels: Easy (+2 letters), Medium (+4 letters), Hard (+6 letters). Earn more diamonds!",
+      step4Desc: "Turn on Hard Mode for more diamonds! 3 difficulty levels: Easy (+1 letter), Medium (+2 letters), Hard (+4 letters). Earn more diamonds!",
       step5Title: "Word Bank & Quests",
       step5Desc: "Save learned words in Word Bank and review them! Complete quests, earn rewards. Get daily login bonus!",
       back: "Back",
       next: "Next",
       start: "Start",
       hint: "Hint",
-      showLetter: "Show Letter",
-      solveWord: "Solve Word",
+      fairy: "Fairy",
       hardMode: "HARD",
       moreGems: "More Gems!",
       speedBonus: "Speed Bonus!",
@@ -73,6 +71,8 @@ const Tutorial = ({ onComplete }) => {
       onComplete();
       // Tutorial'ı bir daha gösterme
       localStorage.setItem('tutorialCompleted', 'true');
+      // Event tetikle - PhoneMenuPage performans tip'ini gösterecek
+      window.dispatchEvent(new CustomEvent('tutorialComplete'));
     }
   };
 
@@ -272,18 +272,20 @@ const Tutorial = ({ onComplete }) => {
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.4 }}
                 >
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600/30 border border-purple-500/30">
-                      <span className="text-xs font-medium text-purple-300">{t.hint}</span>
-                      <span className="text-xs text-yellow-400">💎0.5</span>
+                  <div className="flex items-center justify-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600/30 border border-purple-500/30">
+                      <span className="text-2xl">💡</span>
+                      <div className="flex flex-col items-start">
+                        <span className="text-sm font-medium text-purple-300">{t.hint}</span>
+                        <span className="text-xs text-yellow-400">20💎</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-600/30 border border-pink-500/30">
-                      <span className="text-xs font-medium text-pink-300">{t.showLetter}</span>
-                      <span className="text-xs text-yellow-400">💎1</span>
-                    </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600/30 border border-indigo-500/30">
-                      <span className="text-xs font-medium text-indigo-300">{t.solveWord}</span>
-                      <span className="text-xs text-yellow-400">💎2</span>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-600/30 border border-pink-500/30">
+                      <span className="text-2xl">🧚</span>
+                      <div className="flex flex-col items-start">
+                        <span className="text-sm font-medium text-pink-300">{t.fairy}</span>
+                        <span className="text-xs text-yellow-400">60💎</span>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -332,13 +334,13 @@ const Tutorial = ({ onComplete }) => {
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-center gap-2">
                       <div className="px-2 py-1 rounded-lg bg-red-600/30 border border-red-500/30">
-                        <span className="text-xs font-bold text-red-300">Kolay +2</span>
+                        <span className="text-xs font-bold text-red-300">Kolay +1</span>
                       </div>
                       <div className="px-2 py-1 rounded-lg bg-orange-600/30 border border-orange-500/30">
-                        <span className="text-xs font-bold text-orange-300">Orta +4</span>
+                        <span className="text-xs font-bold text-orange-300">Orta +2</span>
                       </div>
                       <div className="px-2 py-1 rounded-lg bg-yellow-600/30 border border-yellow-500/30">
-                        <span className="text-xs font-bold text-yellow-300">Zor +6</span>
+                        <span className="text-xs font-bold text-yellow-300">Zor +4</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-center gap-1">

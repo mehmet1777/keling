@@ -17003,9 +17003,9 @@ export const levels = [
 {
   id: 1701,
   name: "Bölüm 1701",
-  letters: "-na göre",
+  letters: "buna göre",
   words: [
-    { turkish: "-na göre", english: "according to" },
+    { turkish: "buna göre", english: "according to" },
   ]
 },
 

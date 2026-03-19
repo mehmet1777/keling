@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { App as CapacitorApp } from '@capacitor/app';
+import { SplashScreen } from '@capacitor/splash-screen';
 import LevelSelect from './components/LevelSelect';
 import WordPuzzle from './components/WordPuzzle';
 import WelcomePage from './components/WelcomePage';
@@ -7,8 +9,14 @@ import PhoneMenuPage from './components/PhoneMenuPage';
 import WordBank from './components/WordBank';
 import WordReview from './components/WordReview';
 import Tutorial from './components/Tutorial';
+import FinalCompletionCard from './components/FinalCompletionCard';
 import { levels } from './data/levels';
 import { playBackgroundMusic, pauseBackgroundMusic, updateBackgroundMusicVolume, getEffectsVolume } from './utils/SoundManager';
+import { speak as ttsSpeak, speakWord } from './utils/ttsService';
+import { scheduleMorningReminder, scheduleAfternoonReminder, scheduleEveningReminder, updateLastPlayTime, updateStreakDays, scheduleStreakReminder } from './utils/notificationService';
+import { has2xDiamondBonus } from './utils/inventoryManager';
+import { auth } from './lib/firebase';
+import { fetchUserData, saveUserData, getLocalGameData, applyCloudData, compareProgress } from './lib/userSync';
 
 const COLORS = {
   background: '#1F2937', // Dark Gray
@@ -21,8 +29,14 @@ const COLORS = {
 };
 
 function App() {
-  const [showWelcome, setShowWelcome] = useState(true); 
-  const [showPhoneMenu, setShowPhoneMenu] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    // İlk kez açılıyorsa karşılama sayfasını göster
+    return localStorage.getItem('welcomeShown') !== 'true';
+  });
+  const [showPhoneMenu, setShowPhoneMenu] = useState(() => {
+    // Karşılama sayfası daha önce gösterildiyse direkt menüyü aç
+    return localStorage.getItem('welcomeShown') === 'true';
+  });
   const [showWordBank, setShowWordBank] = useState(false);
   const [showWordReview, setShowWordReview] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(null);
@@ -38,90 +52,13 @@ function App() {
   const audioRef = useRef(null);
   const [diamonds, setDiamonds] = useState(() => {
     const saved = localStorage.getItem('diamonds');
-    return saved ? parseInt(saved) : 1000;
+    return saved ? parseInt(saved) : 197;
   });
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, synced, error
 
-// Kelime telaffuz fonksiyonu
+// Kelime telaffuz fonksiyonu - ttsService kullanıyor
 const speak = (text, language = 'en-US') => {
-  // Sesler yüklenene kadar bekle
-  const speakWithVoices = () => {
-    let voices = window.speechSynthesis.getVoices();
-    
-    // Sesler hala yüklenmediyse, kısa bir süre sonra tekrar dene
-    if (voices.length === 0) {
-      setTimeout(() => speakWithVoices(), 100);
-      return;
-    }
-  
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = language;
-  
-  // Türkçe için konuşma hızını yavaşlat
-  if (language === 'tr-TR') {
-    utterance.rate = 0.6; // Türkçe için çok daha yavaş (0.6x hız)
-  } else {
-    utterance.rate = 0.85; // İngilizce için normal hız
-  }
-  
-  // localStorage'dan ses cinsiyeti tercihini al
-  const voiceGender = localStorage.getItem('voiceGender') || 'male';
-  
-  if (voices.length > 0) {
-    let selectedVoice = null;
-    
-    // Dil bazlı sesleri filtrele
-    const languageVoices = voices.filter(voice => 
-      voice.lang.includes(language.split('-')[0])
-    );
-    
-    if (voiceGender === 'female') {
-      // Kadın sesi ara
-      selectedVoice = languageVoices.find(voice => 
-        voice.name.toLowerCase().includes('female') || 
-        voice.name.toLowerCase().includes('woman') ||
-        voice.name.includes('Zira') ||
-        voice.name.includes('Susan') ||
-        voice.name.includes('Samantha') ||
-        voice.name.includes('Filiz') || // Türkçe kadın sesi
-        voice.name.includes('Selin')
-      );
-    } else {
-      // Erkek sesi ara - daha geniş arama
-      selectedVoice = languageVoices.find(voice => 
-        voice.name.toLowerCase().includes('male') ||
-        voice.name.includes('David') ||
-        voice.name.includes('Mark') ||
-        voice.name.includes('Daniel') ||
-        voice.name.includes('James') ||
-        voice.name.includes('George') ||
-        voice.name.includes('Tolga') || // Türkçe erkek sesi
-        voice.name.includes('Cem')
-      );
-      
-      // Hala bulunamadıysa, pitch'i düşürerek erkek sesi simüle et
-      if (!selectedVoice && languageVoices.length > 0) {
-        selectedVoice = languageVoices[0];
-        utterance.pitch = 0.8; // Daha derin ses
-      }
-    }
-    
-    // Eğer cinsiyete göre bir ses bulunduysa, kullan
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-  }
-  
-  window.speechSynthesis.speak(utterance);
-  };
-  
-  // Sesler yüklenene kadar bekle ve sonra konuş
-  if (window.speechSynthesis.getVoices().length === 0) {
-    window.speechSynthesis.onvoiceschanged = () => {
-      speakWithVoices();
-    };
-  } else {
-    speakWithVoices();
-  }
+  ttsSpeak(text, language);
 };
 
 
@@ -131,43 +68,30 @@ const speak = (text, language = 'en-US') => {
     return saved ? JSON.parse(saved) : false;
   });
 
-  // SpeechSynthesis'i unlock et (tarayıcı kısıtlaması için)
-  useEffect(() => {
-    const unlockAudio = () => {
-      // Sessiz bir ses çal (tarayıcı izni için)
-      const utterance = new SpeechSynthesisUtterance('');
-      utterance.volume = 0;
-      window.speechSynthesis.speak(utterance);
-      
-      // Event listener'ı kaldır
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-    };
-    
-    // İlk tıklama veya dokunmada unlock et
-    document.addEventListener('click', unlockAudio, { once: true });
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    
-    const loadVoices = () => {
-      window.speechSynthesis.getVoices();
-    };
-    
-    loadVoices();
-    
-    return () => {
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-    };
-    
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-  }, []);
+  // TTS artık ttsService tarafından yönetiliyor
 
   const [hardModeLevel, setHardModeLevel] = useState(() => {
     const saved = localStorage.getItem('hardModeLevel');
     return saved ? parseInt(saved) : 1;
   });
+
+  // Splash screen'i hemen gizle
+  useEffect(() => {
+    SplashScreen.hide();
+  }, []);
+
+  // Bildirimler - Uygulama başladığında
+  useEffect(() => {
+    // Bildirimleri başlat (3 zaman dilimi + streak)
+    const initNotifications = async () => {
+      await scheduleMorningReminder();    // 10:00
+      await scheduleAfternoonReminder();  // 17:00
+      await scheduleEveningReminder();    // 20:30
+      await scheduleStreakReminder();
+    };
+    
+    initNotifications();
+  }, []); // Sadece uygulama başladığında
 
   // Arka plan müziği kontrolü
   useEffect(() => {
@@ -220,6 +144,70 @@ const speak = (text, language = 'en-US') => {
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   
+  // Firebase Auth değişikliklerini dinle ve senkronize et
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        setSyncStatus('syncing');
+        try {
+          const cloudData = await fetchUserData(user.uid);
+          const localData = getLocalGameData();
+          
+          if (cloudData) {
+            const winner = compareProgress(localData, cloudData);
+            
+            if (winner === 'cloud') {
+              // Cloud verileri daha ileri - indir
+              applyCloudData(cloudData);
+              // State'leri güncelle
+              setDiamonds(cloudData.diamonds || 197);
+              if (cloudData.unlockedLevels) {
+                setUnlockedLevels(cloudData.unlockedLevels);
+              }
+              if (cloudData.completedLevels) {
+                setCompletedLevels(new Set(cloudData.completedLevels));
+              }
+              if (cloudData.bestTimes) {
+                setBestTimes(cloudData.bestTimes);
+              }
+              if (cloudData.lastTimes) {
+                setLastTimes(cloudData.lastTimes);
+              }
+              if (cloudData.lastPlayedLevel) {
+                setLastPlayedLevel(cloudData.lastPlayedLevel);
+              }
+              console.log('Cloud verileri indirildi');
+            } else if (winner === 'local') {
+              // Local veriler daha ileri - yükle
+              await saveUserData(user.uid, localData);
+              console.log('Local veriler yüklendi');
+            }
+          } else {
+            // Cloud'da veri yok - ilk kez yükle
+            await saveUserData(user.uid, localData);
+            console.log('İlk senkronizasyon yapıldı');
+          }
+          setSyncStatus('synced');
+        } catch (error) {
+          console.error('Senkronizasyon hatası:', error);
+          setSyncStatus('error');
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+  
+  // Önemli değişikliklerde Firebase'e kaydet
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user && syncStatus === 'synced') {
+      const saveTimeout = setTimeout(() => {
+        saveUserData(user.uid, getLocalGameData());
+      }, 2000); // 2 saniye debounce
+      return () => clearTimeout(saveTimeout);
+    }
+  }, [diamonds, completedLevels, syncStatus]);
+  
   const [bestTimes, setBestTimes] = useState(() => {
     const saved = localStorage.getItem('bestTimes');
     return saved ? JSON.parse(saved) : {};
@@ -261,6 +249,51 @@ const speak = (text, language = 'en-US') => {
   useEffect(() => {
     localStorage.setItem('hardModeLevel', hardModeLevel);
   }, [hardModeLevel]);
+
+  // Android back button handling
+  useEffect(() => {
+    let listenerHandle = null;
+    
+    const setupBackButton = async () => {
+      listenerHandle = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+        // If we're in a game level, go back to level select
+        if (selectedLevel) {
+          setSelectedLevel(null);
+          setCompletedLevelDetails(null);
+          return;
+        }
+        
+        // If we're in word bank or word review, go back to phone menu
+        if (showWordBank || showWordReview) {
+          setShowWordBank(false);
+          setShowWordReview(false);
+          setShowPhoneMenu(true);
+          return;
+        }
+        
+        // If we're in phone menu, go back to welcome
+        if (showPhoneMenu) {
+          setShowPhoneMenu(false);
+          setShowWelcome(true);
+          return;
+        }
+        
+        // If we're at welcome screen, exit app
+        if (showWelcome) {
+          CapacitorApp.exitApp();
+        }
+      });
+    };
+    
+    setupBackButton();
+
+    // Cleanup
+    return () => {
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
+    };
+  }, [selectedLevel, showWordBank, showWordReview, showPhoneMenu, showWelcome]);
   
   // Ses dosyasını uygulama başladığında yükleyip hazır tutacak şekilde kodu güncelliyorum.
   useEffect(() => {
@@ -333,6 +366,7 @@ const speak = (text, language = 'en-US') => {
   }, [completedLevelDetails]);
   
   const handleStartGame = () => {
+    localStorage.setItem('welcomeShown', 'true');
     setShowWelcome(false);
     setShowPhoneMenu(true);
   };
@@ -382,6 +416,10 @@ const speak = (text, language = 'en-US') => {
     if (levelId + 1 > unlockedLevels) {
       setUnlockedLevels(levelId + 1);
     }
+    
+    // Bildirimler için son oyun zamanını ve streak'i güncelle
+    updateLastPlayTime();
+    updateStreakDays();
     
     // Bölüm ilk kez tamamlandığında elmas ödülü hesaplama
     if (!wasAlreadyCompleted) {
@@ -439,6 +477,11 @@ const speak = (text, language = 'en-US') => {
       // 9+ harfli kelimeler için hız bonusu (2046+ aralığındaki bölümler)
       else if (levelId >= 2046 && completionTime <= 45) {
         diamondReward += 2.0;
+      }
+      
+      // 2x Elmas Bonusu kontrolü (4 destek rozeti varsa)
+      if (has2xDiamondBonus()) {
+        diamondReward *= 2;
       }
       
       // Toplam ödülü ekle
@@ -555,10 +598,10 @@ const speak = (text, language = 'en-US') => {
     // (Sonraki Bölüm butonuna basıldığında SpeechSynthesis unlock edilmiş olur)
     React.useEffect(() => {
       if (words.length > 0) {
-        let initialDelay = 1500;
+        let initialDelay = 700; // 0.7 saniye sonra telaffuz başlasın
         
         if (isNewCollectionUnlocked) {
-          initialDelay = 4500; // Level sesi için bekle
+          initialDelay = 3500; // Level sesi için bekle (koleksiyon açıldığında)
         }
         
         const timer = setTimeout(() => {
@@ -569,7 +612,7 @@ const speak = (text, language = 'en-US') => {
               const langToUse = englishMode ? 'tr-TR' : 'en-US';
               
               try {
-                speak(textToSpeak, langToUse);
+                speakWord(word.turkish, textToSpeak, langToUse);
               } catch (error) {
                 console.error('❌ Telaffuz hatası:', error);
               }
@@ -635,7 +678,12 @@ const speak = (text, language = 'en-US') => {
     {t.pronunciationInfo}
   </p>
 </div>
-                {words.map((word, index) => (
+                {words.map((word, index) => {
+                  // Kelime uzunluğuna göre font boyutu hesapla
+                  const maxLen = Math.max(word.turkish.length, word.english.length);
+                  const fontSize = maxLen > 10 ? 'text-sm' : maxLen > 7 ? 'text-base' : 'text-lg';
+                  
+                  return (
                   <motion.div 
                     key={index} 
                     className="w-full"
@@ -648,7 +696,7 @@ const speak = (text, language = 'en-US') => {
                       damping: 10
                     }}
                   >
-                    <div className="relative flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-indigo-950/70 to-purple-950/70 border border-white/10 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group">
+                    <div className="relative flex justify-between items-center p-3 sm:p-4 rounded-lg bg-gradient-to-r from-indigo-950/70 to-purple-950/70 border border-white/10 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group">
                       {/* Parlama efekti */}
                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-pink-500/0 opacity-0 group-hover:opacity-100 transform -translate-x-full group-hover:translate-x-full transition-all duration-1000"></div>
                       
@@ -659,18 +707,18 @@ const speak = (text, language = 'en-US') => {
                         <>
                           {/* Sol: İngilizce (bilinen) */}
                           <motion.div 
-                            className="relative z-10 px-4 py-2 rounded-md bg-gradient-to-br from-pink-900/60 to-pink-700/40 border border-pink-500/30 shadow-lg"
+                            className="relative z-10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md bg-gradient-to-br from-pink-900/60 to-pink-700/40 border border-pink-500/30 shadow-lg flex-shrink min-w-0 max-w-[40%]"
                             whileHover={{ 
                               scale: 1.05,
                               boxShadow: "0 0 15px rgba(244, 114, 182, 0.5)"
                             }}
                           >
-                            <span className="text-lg font-bold text-pink-400">{word.english}</span>
+                            <span className={`${fontSize} font-bold text-pink-400 break-words`}>{word.english}</span>
                           </motion.div>
                           
                           {/* Bağıntı çizgisi */}
                           <motion.div 
-                            className="relative z-10 h-0.5 w-10 bg-gradient-to-r from-pink-500/50 to-emerald-500/50"
+                            className="relative z-10 h-0.5 w-6 sm:w-10 flex-shrink-0 mx-1 bg-gradient-to-r from-pink-500/50 to-emerald-500/50"
                             initial={{ scaleX: 0 }}
                             animate={{ scaleX: 1 }}
                             transition={{ delay: index * 0.2 + 0.3, duration: 0.3 }}
@@ -678,22 +726,22 @@ const speak = (text, language = 'en-US') => {
                           
                           {/* Sağ: Türkçe (öğrenilen) + Hoparlör */}
                           <motion.div 
-                            className="relative z-10 px-4 py-2 rounded-md bg-gradient-to-br from-emerald-900/60 to-emerald-700/40 border border-emerald-500/30 shadow-lg"
+                            className="relative z-10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md bg-gradient-to-br from-emerald-900/60 to-emerald-700/40 border border-emerald-500/30 shadow-lg flex-shrink min-w-0 max-w-[45%] flex items-center gap-1 sm:gap-2"
                             whileHover={{ 
                               scale: 1.05,
                               boxShadow: "0 0 15px rgba(52, 211, 153, 0.5)"
                             }}
                           >
-                            <span className="text-lg font-bold text-emerald-400">{word.turkish}</span>
+                            <span className={`${fontSize} font-bold text-emerald-400 break-words`}>{word.turkish}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                speak(word.turkish, 'tr-TR');
+                                speakWord(word.turkish, word.turkish, 'tr-TR');
                               }}
-                              className="ml-2 p-1.5 rounded-full bg-gradient-to-r from-indigo-600/30 to-indigo-800/30 hover:from-indigo-600/40 hover:to-indigo-800/40 border border-indigo-500/30 transition-all duration-300 shadow-md"
+                              className="flex-shrink-0 p-1 sm:p-1.5 rounded-full bg-gradient-to-r from-indigo-600/30 to-indigo-800/30 hover:from-indigo-600/40 hover:to-indigo-800/40 border border-indigo-500/30 transition-all duration-300 shadow-md"
                               title="Telaffuzu dinle"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                               </svg>
                             </button>
@@ -703,18 +751,18 @@ const speak = (text, language = 'en-US') => {
                         <>
                           {/* Sol: Türkçe (bilinen) */}
                           <motion.div 
-                            className="relative z-10 px-4 py-2 rounded-md bg-gradient-to-br from-emerald-900/60 to-emerald-700/40 border border-emerald-500/30 shadow-lg"
+                            className="relative z-10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md bg-gradient-to-br from-emerald-900/60 to-emerald-700/40 border border-emerald-500/30 shadow-lg flex-shrink min-w-0 max-w-[40%]"
                             whileHover={{ 
                               scale: 1.05,
                               boxShadow: "0 0 15px rgba(52, 211, 153, 0.5)"
                             }}
                           >
-                            <span className="text-lg font-bold text-emerald-400">{word.turkish}</span>
+                            <span className={`${fontSize} font-bold text-emerald-400 break-words`}>{word.turkish}</span>
                           </motion.div>
                           
                           {/* Bağıntı çizgisi */}
                           <motion.div 
-                            className="relative z-10 h-0.5 w-10 bg-gradient-to-r from-emerald-500/50 to-pink-500/50"
+                            className="relative z-10 h-0.5 w-6 sm:w-10 flex-shrink-0 mx-1 bg-gradient-to-r from-emerald-500/50 to-pink-500/50"
                             initial={{ scaleX: 0 }}
                             animate={{ scaleX: 1 }}
                             transition={{ delay: index * 0.2 + 0.3, duration: 0.3 }}
@@ -722,22 +770,22 @@ const speak = (text, language = 'en-US') => {
                           
                           {/* Sağ: İngilizce (öğrenilen) + Hoparlör */}
                           <motion.div 
-                            className="relative z-10 px-4 py-2 rounded-md bg-gradient-to-br from-pink-900/60 to-pink-700/40 border border-pink-500/30 shadow-lg"
+                            className="relative z-10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md bg-gradient-to-br from-pink-900/60 to-pink-700/40 border border-pink-500/30 shadow-lg flex-shrink min-w-0 max-w-[45%] flex items-center gap-1 sm:gap-2"
                             whileHover={{ 
                               scale: 1.05,
                               boxShadow: "0 0 15px rgba(244, 114, 182, 0.5)"
                             }}
                           >
-                            <span className="text-lg font-bold text-pink-400">{word.english}</span>
+                            <span className={`${fontSize} font-bold text-pink-400 break-words`}>{word.english}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                speak(word.english, 'en-US');
+                                speakWord(word.turkish, word.english, 'en-US');
                               }}
-                              className="ml-2 p-1.5 rounded-full bg-gradient-to-r from-indigo-600/30 to-indigo-800/30 hover:from-indigo-600/40 hover:to-indigo-800/40 border border-indigo-500/30 transition-all duration-300 shadow-md"
+                              className="flex-shrink-0 p-1 sm:p-1.5 rounded-full bg-gradient-to-r from-indigo-600/30 to-indigo-800/30 hover:from-indigo-600/40 hover:to-indigo-800/40 border border-indigo-500/30 transition-all duration-300 shadow-md"
                               title="Telaffuzu dinle"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                               </svg>
                             </button>
@@ -746,7 +794,8 @@ const speak = (text, language = 'en-US') => {
                       )}
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1053,13 +1102,53 @@ const speak = (text, language = 'en-US') => {
                 completedLevels={completedLevels}
                 diamonds={diamonds}
                 setDiamonds={setDiamonds}
+                onLevelSkipped={() => {
+                  // Seviye atlandığında state'leri güncelle
+                  const newCurrentLevel = parseInt(localStorage.getItem('currentLevel') || '1');
+                  const newCompletedLevels = JSON.parse(localStorage.getItem('completedLevels') || '[]');
+                  const newLevel = levels.find(l => l.id === newCurrentLevel);
+                  
+                  if (newLevel) {
+                    setLastPlayedLevel(newLevel);
+                  }
+                  
+                  // completedLevels Set'ini güncelle
+                  setCompletedLevels(new Set(newCompletedLevels));
+                  
+                  // unlockedLevels'i güncelle
+                  const maxCompleted = Math.max(...newCompletedLevels, 0);
+                  setUnlockedLevels(Math.max(maxCompleted + 1, newCurrentLevel));
+                }}
               />
               {showTutorial && (
                 <Tutorial onComplete={handleCloseTutorial} />
               )}
             </>
           )}
-          {completedLevelDetails && <CompletedLevelDialog />}
+          {completedLevelDetails && (
+            completedLevelDetails.level >= 2600 ? (
+              <FinalCompletionCard
+                onClose={() => {
+                  setCompletedLevelDetails(null);
+                  setSelectedLevel(null);
+                }}
+                onRestart={() => {
+                  // Sadece mevcut seviyeyi sıfırla - tamamlanan bölümler, kelime bankası, koleksiyonlar korunsun
+                  localStorage.setItem('currentLevel', '1');
+                  localStorage.removeItem('lastPlayedLevel');
+                  // unlockedLevels'ı 1 yap ama completedLevels'ı koruyoruz (kelime bankası için)
+                  localStorage.setItem('unlockedLevels', '1');
+                  window.location.reload();
+                }}
+                onClaimReward={(amount) => {
+                  // Final ödülünü ekle
+                  setDiamonds(prev => prev + amount);
+                }}
+              />
+            ) : (
+              <CompletedLevelDialog />
+            )
+          )}
         </>
       )}
     </div>

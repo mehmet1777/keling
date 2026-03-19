@@ -1,6 +1,45 @@
-node_modules
-dist
-.vite
-android
-.DS_Store
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.wrangler/
+
+# Android
+android/app/build/
+android/app/release/
+android/.gradle/
+android/.idea/
+*.apk
+*.aab
+
+# IDE
+.vscode/
+.idea/
+
+# Kiro specs
+.kiro/specs/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+rclone.conf
+rclone.exe

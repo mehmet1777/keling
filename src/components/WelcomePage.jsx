@@ -3,12 +3,45 @@ import { useState, useEffect } from 'react';
 
 const WelcomePage = ({ onStart }) => {
   const [language, setLanguage] = useState(() => {
-    return localStorage.getItem('language') || 'tr';
+    // Önce kullanıcının daha önce seçtiği dile bak
+    const saved = localStorage.getItem('language');
+    if (saved) return saved;
+    
+    // Yoksa cihaz dilini al - Türkçe değilse İngilizce başlat
+    const deviceLang = navigator.language || 'tr';
+    const detectedLang = deviceLang.startsWith('tr') ? 'tr' : 'en';
+    
+    // İlk kez giren kullanıcı için oyun dilini de ayarla
+    // EN arayüz = Türkçe öğrenme modu (englishMode: true)
+    // TR arayüz = İngilizce öğrenme modu (englishMode: false)
+    localStorage.setItem('englishMode', detectedLang === 'en' ? 'true' : 'false');
+    
+    return detectedLang;
   });
+
+  // Dil değiştiğinde oyun dilini de güncelle
+  const handleLanguageChange = (newLang) => {
+    setLanguage(newLang);
+    // Arayüz İngilizce → Türkçe öğrenme modu
+    // Arayüz Türkçe → İngilizce öğrenme modu
+    localStorage.setItem('englishMode', newLang === 'en' ? 'true' : 'false');
+  };
+
+  // Animasyonları geciktirmek için state - sayfa yüklendikten sonra aktif olacak
+  const [animationsEnabled, setAnimationsEnabled] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('language', language);
   }, [language]);
+
+  // Sayfa yüklendikten 2 saniye sonra animasyonları aktif et
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimationsEnabled(true);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const translations = {
     tr: {
@@ -55,14 +88,14 @@ const WelcomePage = ({ onStart }) => {
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       {/* Language Switcher */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
         className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20"
       >
         <div className="flex gap-2 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-full p-1">
           <button
-            onClick={() => setLanguage('tr')}
+            onClick={() => handleLanguageChange('tr')}
             className={`px-3 sm:px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               language === 'tr'
                 ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -72,7 +105,7 @@ const WelcomePage = ({ onStart }) => {
             🇹🇷 TR
           </button>
           <button
-            onClick={() => setLanguage('en')}
+            onClick={() => handleLanguageChange('en')}
             className={`px-3 sm:px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               language === 'en'
                 ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -88,30 +121,30 @@ const WelcomePage = ({ onStart }) => {
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f12_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f12_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
         
-        {/* Glowing orbs - responsive sizes */}
+        {/* Glowing orbs - responsive sizes - animasyonlar geciktirilmiş */}
         <motion.div
-          className="absolute top-10 left-5 sm:top-20 sm:left-20 w-48 h-48 sm:w-72 sm:h-72 bg-purple-500/30 rounded-full blur-3xl"
-          animate={{ 
+          className="absolute top-10 left-5 sm:top-20 sm:left-20 w-48 h-48 sm:w-72 sm:h-72 bg-purple-500/30 rounded-full blur-2xl"
+          animate={animationsEnabled ? { 
             scale: [1, 1.2, 1],
             opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 4, repeat: Infinity }}
+          } : { scale: 1, opacity: 0.3 }}
+          transition={{ duration: 4, repeat: animationsEnabled ? Infinity : 0 }}
         />
         <motion.div
-          className="absolute bottom-10 right-5 sm:bottom-20 sm:right-20 w-56 h-56 sm:w-96 sm:h-96 bg-cyan-500/20 rounded-full blur-3xl"
-          animate={{ 
+          className="absolute bottom-10 right-5 sm:bottom-20 sm:right-20 w-56 h-56 sm:w-96 sm:h-96 bg-cyan-500/20 rounded-full blur-2xl"
+          animate={animationsEnabled ? { 
             scale: [1.2, 1, 1.2],
             opacity: [0.2, 0.4, 0.2]
-          }}
-          transition={{ duration: 5, repeat: Infinity }}
+          } : { scale: 1, opacity: 0.2 }}
+          transition={{ duration: 5, repeat: animationsEnabled ? Infinity : 0 }}
         />
         <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] bg-pink-500/10 rounded-full blur-3xl"
-          animate={{ 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] bg-pink-500/10 rounded-full blur-2xl"
+          animate={animationsEnabled ? { 
             scale: [1, 1.3, 1],
             rotate: [0, 180, 360]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          } : { scale: 1, rotate: 0 }}
+          transition={{ duration: 20, repeat: animationsEnabled ? Infinity : 0, ease: "linear" }}
         />
       </div>
 
@@ -121,20 +154,20 @@ const WelcomePage = ({ onStart }) => {
           
           {/* Left side - Hero content */}
           <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
             className="text-center lg:text-left space-y-3 sm:space-y-4 lg:space-y-6"
           >
             {/* Main title - Logo Style with 3D, Neon & Sparkles */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
               className="relative inline-block"
             >
-              {/* Sparkle particles */}
-              {[...Array(6)].map((_, i) => (
+              {/* Sparkle particles - animasyonlar geciktirilmiş */}
+              {animationsEnabled && [...Array(6)].map((_, i) => (
                 <motion.div
                   key={i}
                   className="absolute w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"
@@ -165,13 +198,13 @@ const WelcomePage = ({ onStart }) => {
                     Keli
                   </span>
                   
-                  {/* Main text with neon glow */}
+                  {/* Main text with neon glow - animasyon geciktirilmiş */}
                   <motion.span 
                     className="relative bg-gradient-to-r from-purple-400 via-pink-400 to-purple-500 bg-clip-text text-transparent"
-                    animate={{ 
+                    animate={animationsEnabled ? { 
                       backgroundPosition: ['0%', '100%', '0%'],
-                    }}
-                    transition={{ duration: 3, repeat: Infinity }}
+                    } : {}}
+                    transition={{ duration: 3, repeat: animationsEnabled ? Infinity : 0 }}
                     style={{ 
                       backgroundSize: '200% auto',
                       filter: 'drop-shadow(0 0 20px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 40px rgba(236, 72, 153, 0.6))',
@@ -188,22 +221,22 @@ const WelcomePage = ({ onStart }) => {
                     NG
                   </span>
                   
-                  {/* NG with neon glow */}
+                  {/* NG with neon glow - animasyon geciktirilmiş */}
                   <motion.span 
                     className="relative bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-500 bg-clip-text text-transparent"
-                    animate={{ 
+                    animate={animationsEnabled ? { 
                       scale: [1, 1.05, 1],
-                    }}
-                    transition={{ duration: 2, repeat: Infinity }}
+                    } : { scale: 1 }}
+                    transition={{ duration: 2, repeat: animationsEnabled ? Infinity : 0 }}
                     style={{ 
                       filter: 'drop-shadow(0 0 20px rgba(34, 211, 238, 0.8)) drop-shadow(0 0 40px rgba(59, 130, 246, 0.6))',
                     }}
                   >
                     NG
-                    {/* Glowing dot */}
+                    {/* Glowing dot - animasyon geciktirilmiş */}
                     <motion.span
                       className="absolute -top-1 -right-1 w-2 h-2 sm:w-3 sm:h-3 bg-cyan-400 rounded-full"
-                      animate={{ 
+                      animate={animationsEnabled ? { 
                         scale: [1, 1.5, 1],
                         opacity: [1, 0.5, 1],
                         boxShadow: [
@@ -211,8 +244,8 @@ const WelcomePage = ({ onStart }) => {
                           '0 0 20px rgba(34, 211, 238, 1)',
                           '0 0 10px rgba(34, 211, 238, 0.8)',
                         ]
-                      }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
+                      } : { scale: 1, opacity: 1 }}
+                      transition={{ duration: 1.5, repeat: animationsEnabled ? Infinity : 0 }}
                     />
                   </motion.span>
                 </span>
@@ -221,9 +254,9 @@ const WelcomePage = ({ onStart }) => {
 
             {/* Subtitle */}
             <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
               className="text-base sm:text-lg lg:text-xl text-gray-400 max-w-lg mx-auto lg:mx-0"
             >
               {t.subtitle}
@@ -231,9 +264,9 @@ const WelcomePage = ({ onStart }) => {
 
             {/* Stats */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
               className="flex gap-3 sm:gap-4 lg:gap-6 flex-wrap justify-center lg:justify-start"
             >
               <div className="flex items-center gap-2">
@@ -267,9 +300,9 @@ const WelcomePage = ({ onStart }) => {
 
             {/* CTA Button */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.4 }}
               className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center lg:justify-start"
             >
               <motion.button
@@ -287,8 +320,8 @@ const WelcomePage = ({ onStart }) => {
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   {t.startButton}
                   <motion.span
-                    animate={{ x: [0, 5, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
+                    animate={animationsEnabled ? { x: [0, 5, 0] } : { x: 0 }}
+                    transition={{ duration: 1.5, repeat: animationsEnabled ? Infinity : 0 }}
                   >
                     →
                   </motion.span>
@@ -304,9 +337,9 @@ const WelcomePage = ({ onStart }) => {
 
           {/* Right side - Feature cards */}
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
             className="space-y-2 sm:space-y-3 lg:space-y-4 mt-6 lg:mt-0"
           >
             {/* Feature card 1 */}
