@@ -35,7 +35,7 @@
     "@splinetool/react-spline": "^4.0.0",
     "canvas-confetti": "^1.9.3",
     "cordova-plugin-purchase": "^13.12.1",
-    "firebase": "^12.6.0",
+    "firebase": "^11.10.0",
     "framer-motion": "^12.4.10",
     "lottie-react": "^2.4.1",
     "react": "^18.2.0",
